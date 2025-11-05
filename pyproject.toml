@@ -1,0 +1,78 @@
+[project]
+name = "laravel-i18n-refactor"
+version = "0.1.0"
+description = "Extract hardcoded strings from Laravel projects for i18n refactoring"
+authors = [{ name = "kakehashi" }]
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+keywords = ["laravel", "i18", "refactor", "localization"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+]
+
+[project.urls]
+"Homepage" = "https://github.com/kakehashi/laravel-i18n-refactor"
+"Bug Tracker" = "https://github.com/kakehashi/laravel-i18n-refactor/issues"
+"Documentation" = "https://github.com/kakehashi/laravel-i18n-refactor#readme"
+
+[project.optional-dependencies]
+dev = [
+    "pylint",
+    "pylint-plugin-utils",
+    "black"
+]
+build = [
+    "build>=1.0.0",
+    "twine>=5.0.0",
+    "wheel>=0.42.0"
+]
+
+[project.scripts]
+laravel-i18n-refactor = "refactor.main:main"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+dev-dependencies = [
+    "build>=1.0.0",
+    "twine>=5.0.0",
+    "wheel>=0.42.0",
+]
+
+[tool.black]
+line-length = 160
+exclude = 'tests/'
+
+[tool.pylint.MASTER]
+#load-plugins = ""
+
+[tool.pylint.FORMAT]
+max-line-length = 160
+
+[tool.pylint.DESIGN]
+max-args = 10
+max-locals = 25
+max-branches = 20
+max-statements = 60
+
+[tool.pylint.messages_control]
+disable = [
+    "W0718",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
