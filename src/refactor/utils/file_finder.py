@@ -8,15 +8,18 @@ from typing import List, Iterator, Set, Optional
 
 # Laravel project directories to auto-exclude when composer.json is found
 LARAVEL_AUTO_EXCLUDE_DIRS = [
-    "vendor",  # Composer dependencies
+    "bootstrap/cache",  # Bootstrap cache
+    "config",  # Configuration files
+    "database",  # Database files (migrations, seeds, factories)
+    "lang",  # Language files
     "node_modules",  # NPM dependencies
     "public",  # Public assets (compiled/generated)
+    "resources/lang",  # Language files
     "storage",  # Storage directory (logs, cache, sessions)
-    "bootstrap/cache",  # Bootstrap cache
-    "resources/lang"  # Language files
-    "lang",  # Language files
-    "tests",  # Test files
     "test",  # Test files
+    "tests",  # Test files
+    "vendor",  # Composer dependencies
+    "routes",  # Route definitions
 ]
 
 
@@ -47,7 +50,7 @@ def get_laravel_exclude_directories(base_directory: Path) -> Set[Path]:
     return exclude_dirs
 
 
-def should_exclude_path(path: Path, exclude_dirs: List[str], auto_exclude_dirs: Set[Path]) -> bool:
+def should_exclude_path(path: Path, exclude_dirs: List[str], auto_exclude_dirs: Set[Path], include_hidden: bool) -> bool:
     """
     Check if a path should be excluded.
 
@@ -55,11 +58,20 @@ def should_exclude_path(path: Path, exclude_dirs: List[str], auto_exclude_dirs: 
         path: Path to check
         exclude_dirs: List of directory names to exclude (user-specified)
         auto_exclude_dirs: Set of directory paths to auto-exclude (Laravel-specific)
+        include_hidden: Include hidden directories (starting with .) in search
 
     Returns:
         True if the path should be excluded
     """
     resolved_path = path.resolve()
+
+    # Exclude hidden directories if include_hidden is False
+    if not include_hidden:
+        for parent in resolved_path.parents:
+            if parent.name.startswith("."):
+                return True
+        if resolved_path.is_dir() and resolved_path.name.startswith("."):
+            return True
 
     # Check if path is inside an auto-excluded directory
     for auto_exclude_dir in auto_exclude_dirs:
@@ -81,7 +93,7 @@ def should_exclude_path(path: Path, exclude_dirs: List[str], auto_exclude_dirs: 
     return False
 
 
-def find_files(directory: Path, pattern: str, exclude_dirs: Optional[List[str]] = None) -> List[Path]:
+def find_files(directory: Path, pattern: str, exclude_dirs: Optional[List[str]] = None, include_hidden: bool = False) -> List[Path]:
     """
     Find files matching a glob pattern in the specified directory.
 
@@ -89,6 +101,7 @@ def find_files(directory: Path, pattern: str, exclude_dirs: Optional[List[str]] 
         directory: Base directory to search in
         pattern: Glob pattern (e.g., "**/*.php", "*.blade.php")
         exclude_dirs: List of directory names to exclude
+        include_hidden: Include hidden directories (starting with .) in search
 
     Returns:
         List of Path objects for matching files
@@ -112,7 +125,7 @@ def find_files(directory: Path, pattern: str, exclude_dirs: Optional[List[str]] 
     # Use glob to find matching files
     files = []
     for file_path in directory.glob(pattern):
-        if file_path.is_file() and not should_exclude_path(file_path, exclude_dirs, auto_exclude_dirs):
+        if file_path.is_file() and not should_exclude_path(file_path, exclude_dirs, auto_exclude_dirs, include_hidden):
             files.append(file_path)
 
     # Sort for consistent ordering
@@ -121,7 +134,7 @@ def find_files(directory: Path, pattern: str, exclude_dirs: Optional[List[str]] 
     return files
 
 
-def find_files_iter(directory: Path, pattern: str, exclude_dirs: Optional[List[str]] = None) -> Iterator[Path]:
+def find_files_iter(directory: Path, pattern: str, exclude_dirs: Optional[List[str]] = None, include_hidden: bool = False) -> Iterator[Path]:
     """
     Find files matching a glob pattern (iterator version).
 
@@ -129,6 +142,7 @@ def find_files_iter(directory: Path, pattern: str, exclude_dirs: Optional[List[s
         directory: Base directory to search in
         pattern: Glob pattern (e.g., "**/*.php", "*.blade.php")
         exclude_dirs: List of directory names to exclude
+        include_hidden: Include hidden directories (starting with .) in search
 
     Yields:
         Path objects for matching files
@@ -152,5 +166,5 @@ def find_files_iter(directory: Path, pattern: str, exclude_dirs: Optional[List[s
     # Use glob to find matching files
     all_files = sorted(directory.glob(pattern))
     for file_path in all_files:
-        if file_path.is_file() and not should_exclude_path(file_path, exclude_dirs, auto_exclude_dirs):
+        if file_path.is_file() and not should_exclude_path(file_path, exclude_dirs, auto_exclude_dirs, include_hidden):
             yield file_path

@@ -7,6 +7,7 @@ from typing import List, Tuple, Set
 from pathlib import Path
 from bs4 import BeautifulSoup, Comment, Tag
 from bs4.element import NavigableString
+from ..data_models.extracted_string import ExtractedString
 from ..utils.string_validator import should_extract_string, get_line_column
 
 
@@ -51,17 +52,21 @@ class BladeProcessor:
         self.min_bytes = min_bytes
         self.content = ""
         self.excluded_ranges: Set[Tuple[int, int]] = set()
+        self.php_ranges = []  # List of (start_pos, end_pos) tuples for PHP blocks
 
-    def process(self) -> List[Tuple[str, int, int, int]]:
+    def process(self) -> List[ExtractedString]:
         """
         Process the Blade file and extract hardcoded strings.
 
         Returns:
-            List of tuples: (text, line, column, length)
+            List of ExtractedString objects
         """
         # Read file content
         with open(self.file_path, "r", encoding="utf-8") as f:
             self.content = f.read()
+
+        # Extract PHP code ranges for context-aware exclusions
+        self.php_ranges = self._extract_php_ranges(self.content)
 
         # Remove comments first
         cleaned_content = self._remove_comments(self.content)
@@ -93,9 +98,115 @@ class BladeProcessor:
             leading_whitespace = len(text) - len(text.lstrip())
             adjusted_column = column + leading_whitespace
 
-            filtered_results.append((stripped_text, line, adjusted_column, stripped_length))
+            filtered_results.append(ExtractedString(stripped_text, line, adjusted_column, stripped_length))
 
         return filtered_results
+
+    def _extract_php_ranges(self, content: str) -> List[Tuple[int, int]]:
+        """
+        Extract all PHP code ranges from Blade content.
+
+        PHP ranges include:
+        - <?php ... ?> (or to end of file if no closing tag)
+        - @php ... @endphp (for Blade files)
+
+        Args:
+            content: File content
+
+        Returns:
+            List of (start_pos, end_pos) tuples representing PHP code ranges
+        """
+        ranges = []
+
+        # Find <?php ... ?> blocks
+        pos = 0
+        while True:
+            # Find opening tag
+            php_start = content.find("<?php", pos)
+            if php_start == -1:
+                break
+
+            # Find closing tag or use end of file
+            php_end = content.find("?>", php_start)
+            if php_end == -1:
+                # No closing tag, PHP goes to end of file
+                ranges.append((php_start, len(content)))
+                break
+            else:
+                ranges.append((php_start, php_end + 2))  # +2 to include ?>
+                pos = php_end + 2
+
+        # Find @php ... @endphp blocks
+        pos = 0
+        while True:
+            blade_php_start = content.find("@php", pos)
+            if blade_php_start == -1:
+                break
+
+            # Check if this is actually @php directive (not part of another word)
+            if blade_php_start > 0 and content[blade_php_start - 1].isalnum():
+                pos = blade_php_start + 4
+                continue
+
+            blade_php_end = content.find("@endphp", blade_php_start)
+            if blade_php_end == -1:
+                # No @endphp, assume it goes to end of file
+                ranges.append((blade_php_start, len(content)))
+                break
+            else:
+                ranges.append((blade_php_start, blade_php_end + 7))  # +7 to include @endphp
+                pos = blade_php_end + 7
+
+        # Sort and merge overlapping ranges
+        if ranges:
+            ranges.sort()
+            merged = [ranges[0]]
+            for start, end in ranges[1:]:
+                if start <= merged[-1][1]:
+                    # Overlapping or adjacent, merge
+                    merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+                else:
+                    merged.append((start, end))
+            return merged
+
+        return ranges
+
+    def _is_in_php_block(self, position: int) -> bool:
+        """
+        Check if a position is within a PHP code block.
+
+        Args:
+            position: Character position in content
+
+        Returns:
+            True if position is within a PHP block
+        """
+        for start, end in self.php_ranges:
+            if start <= position < end:
+                return True
+        return False
+
+    def _get_position_from_line_column(self, content: str, line: int, column: int) -> int:
+        """
+        Get position in content from line and column.
+
+        Args:
+            content: Full content
+            line: Line number (1-based)
+            column: Column number (0-based)
+
+        Returns:
+            Position in content, or -1 if invalid
+        """
+        lines = content.split("\n")
+        if line < 1 or line > len(lines):
+            return -1
+
+        # Calculate position
+        pos = sum(len(lines[i]) + 1 for i in range(line - 1))  # +1 for newline
+        pos += column
+
+        return pos
 
     def _mask_blade_syntax(self, content: str) -> str:
         """

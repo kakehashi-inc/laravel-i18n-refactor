@@ -26,7 +26,6 @@ def create_parser() -> argparse.ArgumentParser:
         "-e", "--exclude", action="append", dest="exclude", help="Directory names to exclude (can be specified multiple times, default: node_modules)"
     )
     extract_parser.add_argument(
-        "-s",
         "--split-threshold",
         type=int,
         default=200,
@@ -34,12 +33,17 @@ def create_parser() -> argparse.ArgumentParser:
         help="Threshold for splitting output into multiple files (default: 200, only applies when output file is specified)",
     )
     extract_parser.add_argument(
-        "-b",
         "--min-bytes",
         type=int,
         default=2,
         dest="min_bytes",
         help="Minimum byte length for extracted strings (default: 2, strings with 2 bytes or less will be excluded)",
+    )
+    extract_parser.add_argument(
+        "--include-hidden",
+        action="store_true",
+        dest="include_hidden",
+        help="Include hidden directories (directories starting with .) in search (default: False)",
     )
 
     # Future actions can be added here
@@ -67,6 +71,7 @@ def main() -> int:
                 exclude_dirs=exclude_dirs,
                 split_threshold=args.split_threshold,
                 min_bytes=args.min_bytes,
+                include_hidden=args.include_hidden,
             )
         else:
             parser.error(f"Unknown action: {args.action}")

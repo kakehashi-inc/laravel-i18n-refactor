@@ -59,6 +59,10 @@ def _write_to_files(results: List[Dict[str, Any]], output_path: Path, split_thre
         # Split into multiple files
         num_files = (total_items + split_threshold - 1) // split_threshold  # Ceiling division
 
+        # Calculate zero-padding width based on number of files
+        # e.g., 11 files -> width=2 (01-11), 100 files -> width=3 (001-100)
+        width = len(str(num_files))
+
         # Prepare file path components
         parent = output_path.parent
         stem = output_path.stem  # filename without extension
@@ -69,13 +73,9 @@ def _write_to_files(results: List[Dict[str, Any]], output_path: Path, split_thre
             end_idx = min(start_idx + split_threshold, total_items)
             chunk = results[start_idx:end_idx]
 
-            # Generate filename
-            if file_index == 0:
-                # First file keeps original name
-                file_path = output_path
-            else:
-                # Subsequent files get -2, -3, etc.
-                file_path = parent / f"{stem}-{file_index + 1}{suffix}"
+            # Generate filename with zero-padded number (01, 02, ...)
+            file_number = str(file_index + 1).zfill(width)
+            file_path = parent / f"{stem}-{file_number}{suffix}"
 
             _write_json_file(chunk, file_path)
 

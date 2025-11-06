@@ -9,7 +9,7 @@ from typing import Optional, List
 
 from refactor.utils.file_finder import find_files_iter
 from refactor.utils.output_formatter import format_output
-from refactor.mods.string_collector import StringCollector
+from refactor.utils.string_collector import StringCollector
 from refactor.mods.blade_processor import BladeProcessor
 from refactor.mods.php_processor import PHPProcessor
 
@@ -48,6 +48,7 @@ def extract_strings(
     exclude_dirs: Optional[List[str]],
     split_threshold: int,
     min_bytes: int,
+    include_hidden: bool,
 ) -> int:
     """
     Extract hardcoded strings from Laravel project files.
@@ -59,6 +60,7 @@ def extract_strings(
         exclude_dirs: List of directory names to exclude
         split_threshold: Threshold for splitting output into multiple files
         min_bytes: Minimum byte length for string extraction
+        include_hidden: Include hidden directories (starting with .) in search
 
     Returns:
         Exit code (0 for success, 1 for error)
@@ -83,7 +85,7 @@ def extract_strings(
         # Find files
         print("Searching for files...", file=sys.stderr)
         try:
-            files = list(find_files_iter(directory, pattern, exclude_dirs))
+            files = list(find_files_iter(directory, pattern, exclude_dirs, include_hidden=include_hidden))
         except ValueError as e:
             print(f"Error: {e}", file=sys.stderr)
             return 1
@@ -200,8 +202,8 @@ def process_blade_file(file_path: Path, collector: StringCollector, min_bytes: i
     processor = BladeProcessor(file_path, min_bytes)
     results = processor.process()
 
-    for text, line, column, length in results:
-        collector.add_string(text, file_path, line, column, length)
+    for extracted in results:
+        collector.add_string(extracted.text, file_path, extracted.line, extracted.column, extracted.length)
 
     return len(results)
 
@@ -221,7 +223,7 @@ def process_php_file(file_path: Path, collector: StringCollector, min_bytes: int
     processor = PHPProcessor(file_path, min_bytes)
     results = processor.process()
 
-    for text, line, column, length in results:
-        collector.add_string(text, file_path, line, column, length)
+    for extracted in results:
+        collector.add_string(extracted.text, file_path, extracted.line, extracted.column, extracted.length)
 
     return len(results)

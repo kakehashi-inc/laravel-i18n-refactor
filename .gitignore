@@ -212,3 +212,4 @@ dist.backup/
 .specstory
 wget-log
 /*.json
+/output/
