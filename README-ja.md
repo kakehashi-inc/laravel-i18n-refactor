@@ -52,8 +52,32 @@ laravel-i18n-refactor extract <directory> [OPTIONS]
 オプション:
   -n, --name PATTERN    ファイル名パターン (デフォルト: "**/*.php")
   -o, --output FILE     出力JSONファイルパス (デフォルト: 標準出力)
+  -e, --exclude DIR     除外するディレクトリ名 (複数回指定可能、デフォルト: node_modules)
   -h, --help           ヘルプメッセージを表示
+
+使用例:
+  # 複数のディレクトリを除外
+  uvx laravel-i18n-refactor extract . -e node_modules -e storage -e bootstrap/cache
+
+  # 特定のパターンから抽出、複数の除外指定
+  uvx laravel-i18n-refactor extract . -n "**/*.blade.php" -e tests -e vendor
 ```
+
+### 自動除外機能
+
+ツールはLaravelプロジェクト（`composer.json`を検出）を自動的に識別し、以下を除外します：
+
+**ユーザー指定の除外:**
+- `-e`/`--exclude`で指定されたディレクトリ（デフォルト: `node_modules`）
+
+**Laravelプロジェクト自動除外:**
+- `vendor` - Composer依存関係
+- `node_modules` - NPM依存関係
+- `public` - 公開アセット（コンパイル済み/生成ファイル）
+- `storage` - ストレージディレクトリ（ログ、キャッシュ、セッション）
+- `bootstrap/cache` - ブートストラップキャッシュファイル
+
+これらの自動除外により、依存関係や生成ファイルが処理されず、ソースコードに集中できます。
 
 ## 出力形式
 

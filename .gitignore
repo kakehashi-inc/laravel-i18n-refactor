@@ -211,3 +211,4 @@ dist.backup/
 /*.sql
 .specstory
 wget-log
+/*.json

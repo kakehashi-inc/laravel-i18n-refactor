@@ -13,38 +13,18 @@ from typing import Optional
 
 def create_parser() -> argparse.ArgumentParser:
     """Create the main argument parser."""
-    parser = argparse.ArgumentParser(
-        prog='laravel-i18n-refactor',
-        description='Laravel internationalization support tool'
-    )
+    parser = argparse.ArgumentParser(prog="laravel-i18n-refactor", description="Laravel internationalization support tool")
 
     # Create subparsers for different actions
-    subparsers = parser.add_subparsers(
-        dest='action',
-        help='Action to perform',
-        required=True
-    )
+    subparsers = parser.add_subparsers(dest="action", help="Action to perform", required=True)
 
     # Extract action
-    extract_parser = subparsers.add_parser(
-        'extract',
-        help='Extract hardcoded strings from Laravel project files'
-    )
+    extract_parser = subparsers.add_parser("extract", help="Extract hardcoded strings from Laravel project files")
+    extract_parser.add_argument("directory", type=Path, help="Target directory to search for files")
+    extract_parser.add_argument("-n", "--name", default="**/*.php", help='File name pattern (e.g., "**/*.blade.php", "*.php")')
+    extract_parser.add_argument("-o", "--output", type=Path, default=None, help="Output JSON file path (default: stdout)")
     extract_parser.add_argument(
-        'directory',
-        type=Path,
-        help='Target directory to search for files'
-    )
-    extract_parser.add_argument(
-        '-n', '--name',
-        default='**/*.php',
-        help='File name pattern (e.g., "**/*.blade.php", "*.php")'
-    )
-    extract_parser.add_argument(
-        '-o', '--output',
-        type=Path,
-        default=None,
-        help='Output JSON file path (default: stdout)'
+        "-e", "--exclude", action="append", dest="exclude", help="Directory names to exclude (can be specified multiple times, default: node_modules)"
     )
 
     # Future actions can be added here
@@ -59,24 +39,24 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        if args.action == 'extract':
+        if args.action == "extract":
             from refactor.actions.extract import extract_strings
-            return extract_strings(
-                directory=args.directory,
-                pattern=args.name,
-                output_path=args.output
-            )
+
+            # Set default exclude if not specified
+            exclude_dirs = args.exclude if args.exclude else ["node_modules"]
+
+            return extract_strings(directory=args.directory, pattern=args.name, output_path=args.output, exclude_dirs=exclude_dirs)
         else:
-            parser.error(f'Unknown action: {args.action}')
+            parser.error(f"Unknown action: {args.action}")
             return 1
 
     except KeyboardInterrupt:
-        print('\nOperation cancelled by user', file=sys.stderr)
+        print("\nOperation cancelled by user", file=sys.stderr)
         return 130
     except Exception as e:
-        print(f'Error: {e}', file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

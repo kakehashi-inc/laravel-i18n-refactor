@@ -24,11 +24,7 @@ class StringOccurrence:
 
     def to_dict(self) -> Dict[str, int]:
         """Convert to dictionary format."""
-        return {
-            'line': self.line,
-            'column': self.column,
-            'length': self.length
-        }
+        return {"line": self.line, "column": self.column, "length": self.length}
 
 
 class StringCollector:
@@ -49,14 +45,7 @@ class StringCollector:
         # Dictionary mapping text to list of (file_path, occurrences)
         self.strings: Dict[str, List[Tuple[str, List[StringOccurrence]]]] = {}
 
-    def add_string(
-        self,
-        text: str,
-        file_path: Path,
-        line: int,
-        column: int,
-        length: int
-    ) -> None:
+    def add_string(self, text: str, file_path: Path, line: int, column: int, length: int) -> None:
         """
         Add a string occurrence.
 
@@ -117,15 +106,9 @@ class StringCollector:
             occurrences = []
 
             for file_path, positions in file_occurrences:
-                occurrences.append({
-                    'file': file_path,
-                    'positions': [pos.to_dict() for pos in positions]
-                })
+                occurrences.append({"file": file_path, "positions": [pos.to_dict() for pos in positions]})
 
-            results.append({
-                'text': text,
-                'occurrences': occurrences
-            })
+            results.append({"text": text, "occurrences": occurrences})
 
         return results
 

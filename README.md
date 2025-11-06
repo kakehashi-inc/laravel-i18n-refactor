@@ -43,7 +43,7 @@ laravel-i18n-refactor extract .
 
 ### Command Line Options
 
-```
+```text
 laravel-i18n-refactor extract <directory> [OPTIONS]
 
 Arguments:
@@ -52,8 +52,32 @@ Arguments:
 Options:
   -n, --name PATTERN    File name pattern (default: "**/*.php")
   -o, --output FILE     Output JSON file path (default: stdout)
+  -e, --exclude DIR     Directory names to exclude (can be specified multiple times, default: node_modules)
   -h, --help           Show this help message
+
+Examples:
+  # Exclude multiple directories
+  uvx laravel-i18n-refactor extract . -e node_modules -e storage -e bootstrap/cache
+
+  # Extract only from specific pattern with exclusions
+  uvx laravel-i18n-refactor extract . -n "**/*.blade.php" -e tests -e vendor
 ```
+
+### Automatic Exclusions
+
+The tool automatically detects Laravel projects (by finding `composer.json`) and excludes:
+
+**User-specified exclusions:**
+- Directories specified with `-e`/`--exclude` (default: `node_modules`)
+
+**Laravel project auto-exclusions:**
+- `vendor` - Composer dependencies
+- `node_modules` - NPM dependencies
+- `public` - Public assets (compiled/generated files)
+- `storage` - Storage directory (logs, cache, sessions)
+- `bootstrap/cache` - Bootstrap cache files
+
+These auto-exclusions ensure that dependencies and generated files are not processed, keeping the focus on your source code.
 
 ## Output Format
 
