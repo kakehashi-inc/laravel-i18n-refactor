@@ -87,9 +87,15 @@ def _write_json_file(data: List[Dict[str, Any]], file_path: Path) -> None:
     Args:
         data: Data to write
         file_path: Output file path
+
+    Note:
+        The caller should check if the output directory exists and prompt the user
+        for creation if needed. This function creates directories as a safety fallback.
     """
     json_output = json.dumps(data, ensure_ascii=False, indent=2, sort_keys=False)
 
+    # Create directories if they don't exist (safety fallback)
+    # The caller should have already verified directory existence with user prompt
     file_path.parent.mkdir(parents=True, exist_ok=True)
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(json_output)
