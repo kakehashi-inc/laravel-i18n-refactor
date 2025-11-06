@@ -4,6 +4,7 @@ Extract action for extracting hardcoded strings from Laravel files.
 
 import sys
 import os
+import re
 from pathlib import Path
 from typing import Optional, List
 
@@ -53,6 +54,58 @@ def check_output_directory(output_path: Path) -> bool:
     else:
         print("Operation cancelled. Directory was not created.", file=sys.stderr)
         return False
+
+
+def check_and_remove_existing_files(output_path: Path) -> None:
+    """
+    Check if output files already exist and prompt user to delete them.
+    This is an optional step - processing continues regardless of user response.
+
+    Args:
+        output_path: Output file path
+    """
+    output_dir = output_path.parent
+    stem = output_path.stem
+    suffix = output_path.suffix
+
+    # Pattern matches both single file and split files
+    # e.g., "output.json" or "output-01.json", "output-02.json", etc.
+    pattern = re.compile(rf"^{re.escape(stem)}(-\d+)?{re.escape(suffix)}$")
+
+    # Find matching files in the output directory
+    existing_files = []
+    if output_dir.exists():
+        for file_path in output_dir.iterdir():
+            if file_path.is_file() and pattern.match(file_path.name):
+                existing_files.append(file_path)
+
+    # If no existing files, no action needed
+    if not existing_files:
+        return
+
+    # Display existing files and prompt for deletion
+    print("\nThe following output file(s) already exist:", file=sys.stderr)
+    for file_path in sorted(existing_files):
+        print(f"  {file_path}", file=sys.stderr)
+    print("Delete these file(s) before processing? (Y/n): ", end="", flush=True, file=sys.stderr)
+
+    try:
+        response = input().strip()
+    except EOFError:
+        # Handle case where input is not available (e.g., piped input)
+        print("\nNo input available. Skipping file deletion.", file=sys.stderr)
+        return
+
+    if response.upper() == "Y":
+        # Delete all existing files, continue even if some fail
+        for file_path in existing_files:
+            try:
+                file_path.unlink()
+            except Exception as e:
+                print(f"Warning: Failed to delete {file_path}: {e}", file=sys.stderr)
+                # Continue deleting other files
+    else:
+        print("Skipped deletion. Existing files will be overwritten.", file=sys.stderr)
 
 
 def truncate_path(path_str: str, max_width: int) -> str:
@@ -147,6 +200,9 @@ def extract_strings(
             if not check_output_directory(output_path):
                 print("Error: Output directory creation cancelled", file=sys.stderr)
                 return 0
+
+            # Check for existing output files and prompt for deletion (optional)
+            check_and_remove_existing_files(output_path)
 
         # Initialize collector with prepared exclude matcher
         collector = StringCollector(exclude_matcher)
