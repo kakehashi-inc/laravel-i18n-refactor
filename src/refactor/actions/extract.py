@@ -239,7 +239,7 @@ def extract_strings(
 
         # Output results
         print("Writing output...", file=sys.stderr)
-        format_output(results, output_path, split_threshold)
+        output_files = format_output(results, output_path, split_threshold)
 
         # Print summary to stderr
         print(f"\nProcessed {processed_count} files", file=sys.stderr)
@@ -248,6 +248,64 @@ def extract_strings(
 
         if error_count > 0:
             print(f"Errors: {error_count} files failed to process", file=sys.stderr)
+
+        # Display output files and AI translation prompt if output_path is specified
+        if output_files:
+            print("\n" + "=" * 80, file=sys.stderr)
+            print("OUTPUT FILES:", file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            for file_path in output_files:
+                print(f"  {file_path}", file=sys.stderr)
+
+            print("\n" + "=" * 80, file=sys.stderr)
+            print("IMPORTANT NOTE:", file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print('The prompt sample below uses "en" and "ja" as language keys.', file=sys.stderr)
+            print("Adjust these keys to match your Laravel project's lang/ directory structure", file=sys.stderr)
+            print("before using the prompt with AI.", file=sys.stderr)
+            print("Examples:", file=sys.stderr)
+            print('  lang/en/, lang/ja/ -> use "en", "ja"', file=sys.stderr)
+            print('  lang/en_US/, lang/ja_JP/ -> use "en_US", "ja_JP"', file=sys.stderr)
+
+            print("\n" + "=" * 80, file=sys.stderr)
+            print("AI TRANSLATION PROMPT SAMPLE:", file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
+            print(
+                """
+Please add translation information to the JSON file(s) above. For each entry:
+
+1. Add a "translations" field at the same level as "text"
+2. Inside "translations", provide translations with these language keys:
+   - "en": English translation
+   - "ja": Japanese translation
+3. Examine the "text" value and its surrounding code context in "occurrences" → "positions" → "context"
+4. If the text is clearly NOT meant for user-facing i18n (such as technical identifiers,
+   dimension patterns like "600x600", CSS class names, or code literals), set "translations": false
+
+Output format:
+
+For translatable text:
+{
+  "text": "Please log in",
+  "translations": {
+    "en": "Please log in",
+    "ja": "ログインしてください"
+  },
+  "occurrences": [...]
+}
+
+For non-translatable text:
+{
+  "text": "600x600",
+  "translations": false,
+  "occurrences": [...]
+}
+
+Process all entries in the file(s) and return the complete modified JSON.
+""",
+                file=sys.stderr,
+            )
+            print("=" * 80, file=sys.stderr)
 
         return 0
 
