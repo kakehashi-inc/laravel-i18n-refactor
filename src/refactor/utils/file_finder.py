@@ -8,11 +8,15 @@ from typing import List, Iterator, Set, Optional
 
 # Laravel project directories to auto-exclude when composer.json is found
 LARAVEL_AUTO_EXCLUDE_DIRS = [
-    'vendor',           # Composer dependencies
-    'node_modules',     # NPM dependencies
-    'public',           # Public assets (compiled/generated)
-    'storage',          # Storage directory (logs, cache, sessions)
-    'bootstrap/cache',  # Bootstrap cache
+    "vendor",  # Composer dependencies
+    "node_modules",  # NPM dependencies
+    "public",  # Public assets (compiled/generated)
+    "storage",  # Storage directory (logs, cache, sessions)
+    "bootstrap/cache",  # Bootstrap cache
+    "resources/lang"  # Language files
+    "lang",  # Language files
+    "tests",  # Test files
+    "test",  # Test files
 ]
 
 
@@ -43,11 +47,7 @@ def get_laravel_exclude_directories(base_directory: Path) -> Set[Path]:
     return exclude_dirs
 
 
-def should_exclude_path(
-    path: Path,
-    exclude_dirs: List[str],
-    auto_exclude_dirs: Set[Path]
-) -> bool:
+def should_exclude_path(path: Path, exclude_dirs: List[str], auto_exclude_dirs: Set[Path]) -> bool:
     """
     Check if a path should be excluded.
 
@@ -81,11 +81,7 @@ def should_exclude_path(
     return False
 
 
-def find_files(
-    directory: Path,
-    pattern: str,
-    exclude_dirs: Optional[List[str]] = None
-) -> List[Path]:
+def find_files(directory: Path, pattern: str, exclude_dirs: Optional[List[str]] = None) -> List[Path]:
     """
     Find files matching a glob pattern in the specified directory.
 
@@ -116,9 +112,7 @@ def find_files(
     # Use glob to find matching files
     files = []
     for file_path in directory.glob(pattern):
-        if file_path.is_file() and not should_exclude_path(
-            file_path, exclude_dirs, auto_exclude_dirs
-        ):
+        if file_path.is_file() and not should_exclude_path(file_path, exclude_dirs, auto_exclude_dirs):
             files.append(file_path)
 
     # Sort for consistent ordering
@@ -127,11 +121,7 @@ def find_files(
     return files
 
 
-def find_files_iter(
-    directory: Path,
-    pattern: str,
-    exclude_dirs: Optional[List[str]] = None
-) -> Iterator[Path]:
+def find_files_iter(directory: Path, pattern: str, exclude_dirs: Optional[List[str]] = None) -> Iterator[Path]:
     """
     Find files matching a glob pattern (iterator version).
 
@@ -162,7 +152,5 @@ def find_files_iter(
     # Use glob to find matching files
     all_files = sorted(directory.glob(pattern))
     for file_path in all_files:
-        if file_path.is_file() and not should_exclude_path(
-            file_path, exclude_dirs, auto_exclude_dirs
-        ):
+        if file_path.is_file() and not should_exclude_path(file_path, exclude_dirs, auto_exclude_dirs):
             yield file_path

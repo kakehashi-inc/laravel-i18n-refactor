@@ -8,7 +8,6 @@ A tool to help with Laravel internationalization by extracting hardcoded strings
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -25,6 +24,22 @@ def create_parser() -> argparse.ArgumentParser:
     extract_parser.add_argument("-o", "--output", type=Path, default=None, help="Output JSON file path (default: stdout)")
     extract_parser.add_argument(
         "-e", "--exclude", action="append", dest="exclude", help="Directory names to exclude (can be specified multiple times, default: node_modules)"
+    )
+    extract_parser.add_argument(
+        "-s",
+        "--split-threshold",
+        type=int,
+        default=200,
+        dest="split_threshold",
+        help="Threshold for splitting output into multiple files (default: 200, only applies when output file is specified)",
+    )
+    extract_parser.add_argument(
+        "-b",
+        "--min-bytes",
+        type=int,
+        default=2,
+        dest="min_bytes",
+        help="Minimum byte length for extracted strings (default: 2, strings with 2 bytes or less will be excluded)",
     )
 
     # Future actions can be added here
@@ -45,7 +60,14 @@ def main() -> int:
             # Set default exclude if not specified
             exclude_dirs = args.exclude if args.exclude else ["node_modules"]
 
-            return extract_strings(directory=args.directory, pattern=args.name, output_path=args.output, exclude_dirs=exclude_dirs)
+            return extract_strings(
+                directory=args.directory,
+                pattern=args.name,
+                output_path=args.output,
+                exclude_dirs=exclude_dirs,
+                split_threshold=args.split_threshold,
+                min_bytes=args.min_bytes,
+            )
         else:
             parser.error(f"Unknown action: {args.action}")
             return 1

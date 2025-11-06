@@ -56,12 +56,8 @@ class StringCollector:
             column: Column number (0-based)
             length: String length in characters
         """
-        # Calculate relative path
-        try:
-            relative_path = str(file_path.relative_to(self.base_dir))
-        except ValueError:
-            # If file is not relative to base_dir, use absolute path
-            relative_path = str(file_path)
+        # Use absolute path
+        absolute_path = str(file_path.resolve())
 
         # Create occurrence
         occurrence = StringOccurrence(line, column, length)
@@ -72,13 +68,13 @@ class StringCollector:
 
         # Find existing file entry
         for file_entry in self.strings[text]:
-            if file_entry[0] == relative_path:
+            if file_entry[0] == absolute_path:
                 # Add to existing file's occurrences
                 file_entry[1].append(occurrence)
                 return
 
         # Create new file entry
-        self.strings[text].append((relative_path, [occurrence]))
+        self.strings[text].append((absolute_path, [occurrence]))
 
     def get_results(self) -> List[Dict]:
         """

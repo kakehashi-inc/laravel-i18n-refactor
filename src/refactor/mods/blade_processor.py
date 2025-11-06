@@ -7,6 +7,7 @@ from typing import List, Tuple, Set
 from pathlib import Path
 from bs4 import BeautifulSoup, Comment, Tag
 from bs4.element import NavigableString
+from ..utils.string_validator import should_extract_string, get_line_column
 
 
 class BladeProcessor:
@@ -38,14 +39,16 @@ class BladeProcessor:
         r"\?\>"  # PHP close tag
     )
 
-    def __init__(self, file_path: Path):
+    def __init__(self, file_path: Path, min_bytes: int):
         """
         Initialize the processor.
 
         Args:
             file_path: Path to the Blade template file
+            min_bytes: Minimum byte length for string extraction
         """
         self.file_path = file_path
+        self.min_bytes = min_bytes
         self.content = ""
         self.excluded_ranges: Set[Tuple[int, int]] = set()
 
@@ -158,84 +161,12 @@ class BladeProcessor:
         Returns:
             True if text should be excluded
         """
-        # Exclude empty or whitespace-only strings
-        if not text or not text.strip():
-            return True
-
         # Exclude if contains Blade syntax (safety check)
         if self.BLADE_SYNTAX_PATTERN.search(text):
             return True
 
-        # Exclude very short strings that are likely not translatable text
-        stripped = text.strip()
-        if len(stripped) <= 3:
-            # Allow only if it contains Japanese or other non-ASCII characters
-            if not self._contains_non_ascii(stripped):
-                # Skip if it's only numbers, operators, or single characters
-                if stripped.isdigit() or stripped in [
-                    "!=",
-                    "==",
-                    "<=",
-                    ">=",
-                    "<",
-                    ">",
-                    "=",
-                    "+",
-                    "-",
-                    "*",
-                    "/",
-                    "%",
-                    "&",
-                    "|",
-                    "^",
-                    "~",
-                    "!",
-                    "?",
-                    "@",
-                    "#",
-                    "$",
-                    "(",
-                    ")",
-                    "[",
-                    "]",
-                    "{",
-                    "}",
-                    ":",
-                    ";",
-                    ",",
-                    ".",
-                    "->",
-                    "=>",
-                    "::",
-                    "..",
-                    "...",
-                ]:
-                    return True
-
-        # Exclude strings that look like technical identifiers (snake_case, camelCase, etc.)
-        # But allow sentences with spaces
-        if "_" in stripped and " " not in stripped and not self._contains_non_ascii(stripped):
-            # Looks like a config key or column name: email_from_address, created_at, etc.
-            if stripped.islower() or stripped.isupper():
-                return True
-
-        # Exclude strings that are all uppercase without spaces (likely constants)
-        if stripped.isupper() and " " not in stripped and not self._contains_non_ascii(stripped):
-            return True
-
-        return False
-
-    def _contains_non_ascii(self, text: str) -> bool:
-        """
-        Check if the text contains non-ASCII characters (e.g., Japanese).
-
-        Args:
-            text: Text to check
-
-        Returns:
-            True if text contains non-ASCII characters
-        """
-        return any(ord(char) > 127 for char in text)
+        # Use common validation logic (inverted - should_extract returns True if we want it)
+        return not should_extract_string(text, self.min_bytes)
 
     def _remove_comments(self, content: str) -> str:
         """
@@ -383,15 +314,20 @@ class BladeProcessor:
                 if not text or text.isspace():
                     continue
 
-                # Find position in original content
-                pos = content.find(text)
-                if pos == -1 or self._is_in_excluded_range(pos):
-                    continue
+                # Find ALL occurrences of this text in the ORIGINAL content
+                # This is more reliable than trying to track position changes
+                search_pos = 0
+                while True:
+                    pos = self.content.find(text, search_pos)
+                    if pos == -1:
+                        break
 
-                # Calculate line and column
-                line, column = self._get_line_column(content, pos)
+                    # Calculate line and column from original content
+                    line, column = get_line_column(self.content, pos)
+                    results.append((text, line, column, len(text)))
 
-                results.append((text, line, column, len(text)))
+                    # Move to next potential occurrence
+                    search_pos = pos + len(text)
 
         return results
 
@@ -411,16 +347,20 @@ class BladeProcessor:
                     attr_value = tag.attrs[attr_name]
 
                     if isinstance(attr_value, str) and attr_value and not attr_value.isspace():
-                        # Find position in original content
+                        # Find ALL occurrences in original content
                         search_pattern = f'{attr_name}="{attr_value}"'
-                        pos = content.find(search_pattern)
+                        search_pos = 0
 
-                        if pos != -1:
+                        while True:
+                            pos = self.content.find(search_pattern, search_pos)
+                            if pos == -1:
+                                break
+
                             value_pos = pos + len(attr_name) + 2  # +2 for ="
+                            line, column = get_line_column(self.content, value_pos)
+                            results.append((attr_value, line, column, len(attr_value)))
 
-                            if not self._is_in_excluded_range(value_pos):
-                                line, column = self._get_line_column(content, value_pos)
-                                results.append((attr_value, line, column, len(attr_value)))
+                            search_pos = pos + len(search_pattern)
 
         return results
 
@@ -448,23 +388,7 @@ class BladeProcessor:
                     if pos != -1 and not self._is_in_excluded_range(pos):
                         # Position of string content (excluding quotes)
                         value_pos = pos + 1
-                        line, column = self._get_line_column(content, value_pos)
+                        line, column = get_line_column(content, value_pos)
                         results.append((string_value, line, column, len(string_value)))
 
         return results
-
-    def _get_line_column(self, content: str, pos: int) -> Tuple[int, int]:
-        """
-        Calculate line and column number for a position.
-
-        Args:
-            content: Full content
-            pos: Position in content
-
-        Returns:
-            Tuple of (line, column) where line is 1-based and column is 0-based
-        """
-        lines_before = content[:pos].split("\n")
-        line = len(lines_before)
-        column = len(lines_before[-1]) if lines_before else 0
-        return line, column

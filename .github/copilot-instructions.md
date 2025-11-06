@@ -143,3 +143,4 @@ adjusted_column = column + leading_whitespace
 - Use Python AST for parsing (incompatible with Blade syntax)
 - Modify exclusion patterns without consulting `Documents/システム仕様書.md` (authoritative spec)
 - Change line/column indexing conventions (breaks tooling compatibility)
+- **Define default values outside of `main.py`:** Default values for command-line parameters must ONLY be defined in `main.py` argparse configuration. All other functions must accept these parameters as required arguments (not Optional with defaults). This prevents inconsistency and maintenance issues from scattered default values across the codebase.
