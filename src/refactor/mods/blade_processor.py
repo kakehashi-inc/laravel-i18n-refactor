@@ -247,6 +247,10 @@ class BladeProcessor:
         - Blade directives (@if, @endif, etc.)
         - Blade directives with array arguments (@include, @component, etc.)
         - PHP blocks (<?php...?>, @php...@endphp)
+        - <style> tags (CSS code - never internationalized)
+
+        NOTE: <script> tags are NOT excluded because they may contain
+        internationalized strings passed from PHP side.
 
         These ranges are used in process() to filter out extracted strings
         that fall within excluded positions.
@@ -255,6 +259,11 @@ class BladeProcessor:
             content: Cleaned content (comments removed, but Blade syntax intact)
         """
         self.excluded_ranges = set()
+
+        # Find and exclude <style> tags (CSS code should never be extracted)
+        # Match <style...>...</style> including multiline content
+        for match in re.finditer(r"<style[^>]*>.*?</style>", content, re.DOTALL | re.IGNORECASE):
+            self.excluded_ranges.add((match.start(), match.end()))
 
         # Find translation functions
         for pattern in self.BLADE_TRANSLATION_PATTERNS:
@@ -399,6 +408,12 @@ class BladeProcessor:
         Filtering of Blade syntax is done afterwards in process() using _should_exclude_text()
         and _is_in_excluded_range() checks.
 
+        <style> tags are completely excluded from extraction as they contain CSS code
+        which should never be internationalized.
+
+        <script> tags are NOT excluded because they may contain internationalized strings
+        passed from PHP side (e.g., JavaScript variables with translated text).
+
         Args:
             content: Cleaned HTML content (comments removed, but Blade syntax intact)
 
@@ -418,7 +433,8 @@ class BladeProcessor:
             # Extract attribute values
             results.extend(self._extract_attributes(soup))
 
-            # Extract JavaScript strings - do not pass content, use self.content
+            # Extract JavaScript strings from <script> tags
+            # These may contain internationalized strings from PHP
             results.extend(self._extract_script_strings(soup))
 
         except Exception:
@@ -515,7 +531,19 @@ class BladeProcessor:
         return results
 
     def _extract_script_strings(self, soup: BeautifulSoup) -> List[Tuple[str, int, int, int]]:
-        """Extract string literals from <script> tags."""
+        """
+        Extract string literals from <script> tags.
+
+        Unlike <style> tags (which contain only CSS), <script> tags may contain
+        internationalized strings passed from PHP side. Therefore, we extract
+        string literals from JavaScript code.
+
+        Args:
+            soup: BeautifulSoup object
+
+        Returns:
+            List of tuples: (text, line, column, length)
+        """
         results = []
 
         for script in soup.find_all("script"):
