@@ -14,6 +14,46 @@ from refactor.mods.blade_processor import BladeProcessor
 from refactor.mods.php_processor import PHPProcessor
 
 
+def check_output_directory(output_path: Path) -> bool:
+    """
+    Check if the output directory exists and prompt user to create if not.
+
+    Args:
+        output_path: Output file path
+
+    Returns:
+        True if directory exists or user chose to create it, False otherwise
+    """
+    output_dir = output_path.parent
+
+    # If directory exists, no prompt needed
+    if output_dir.exists():
+        return True
+
+    # Directory doesn't exist, prompt user
+    print(f"\nOutput directory does not exist: {output_dir}", file=sys.stderr)
+    print("Create directory recursively? (Y/n): ", end="", flush=True, file=sys.stderr)
+
+    try:
+        response = input().strip()
+    except EOFError:
+        # Handle case where input is not available (e.g., piped input)
+        print("\nNo input available. Cannot create directory.", file=sys.stderr)
+        return False
+
+    if response.upper() == 'Y':
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            print(f"Created directory: {output_dir}", file=sys.stderr)
+            return True
+        except Exception as e:
+            print(f"Error: Failed to create directory: {e}", file=sys.stderr)
+            return False
+    else:
+        print("Operation cancelled. Directory was not created.", file=sys.stderr)
+        return False
+
+
 def truncate_path(path_str: str, max_width: int) -> str:
     """
     Truncate a file path to fit within max_width by removing the middle part.
@@ -164,6 +204,12 @@ def extract_strings(
         # Get consolidated results
         print("Consolidating results...", file=sys.stderr)
         results = collector.get_results()
+
+        # Check output directory before writing (only if output_path is specified)
+        if output_path:
+            if not check_output_directory(output_path):
+                print("Error: Output directory creation cancelled", file=sys.stderr)
+                return 1
 
         # Output results
         print("Writing output...", file=sys.stderr)
