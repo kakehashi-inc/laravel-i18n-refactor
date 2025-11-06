@@ -47,20 +47,72 @@ laravel-i18n-refactor extract .
 laravel-i18n-refactor extract <directory> [OPTIONS]
 
 Arguments:
-  directory              Target directory to search for files
+  directory                 Target directory to search for files
 
 Options:
-  -n, --name PATTERN    File name pattern (default: "**/*.php")
-  -o, --output FILE     Output JSON file path (default: stdout)
-  -e, --exclude DIR     Directory names to exclude (can be specified multiple times, default: node_modules)
-  -h, --help           Show this help message
+  -n, --name PATTERN        File name pattern (default: "**/*.php")
+                            Examples: "**/*.blade.php", "*.php", "**/*_controller.php"
+
+  -o, --output FILE         Output JSON file path (default: stdout)
+                            If not specified, output is written to stdout
+
+  -e, --exclude DIR         Directory names to exclude (can be specified multiple times, default: node_modules)
+                            Example: -e vendor -e storage -e tests
+
+  --split-threshold NUM     Threshold for splitting output into multiple files (default: 100)
+                            When extracted strings exceed this number, automatically split into multiple files
+                            Use 0 to disable splitting
+
+  --min-bytes NUM           Minimum byte length for extracted strings (default: 2)
+                            Strings with fewer bytes than this value will be excluded
+
+  --include-hidden          Include hidden directories (directories starting with .) in search
+                            Default: False (hidden directories are skipped)
+
+  --context-lines NUM       Number of context lines to include in output (default: 5)
+                            5 means: 2 lines before + target line + 2 lines after
+                            Use 0 to disable context output
+
+  --enable-blade            Enable processing of .blade.php files (default: True)
+
+  --disable-blade           Disable processing of .blade.php files
+
+  --enable-php              Enable processing of regular .php files (default: False)
+
+  --disable-php             Disable processing of regular .php files (this is the default)
+
+  -h, --help                Show this help message
 
 Examples:
+  # Basic usage (Blade files only, default settings)
+  uvx laravel-i18n-refactor extract .
+
   # Exclude multiple directories
   uvx laravel-i18n-refactor extract . -e node_modules -e storage -e bootstrap/cache
 
   # Extract only from specific pattern with exclusions
   uvx laravel-i18n-refactor extract . -n "**/*.blade.php" -e tests -e vendor
+
+  # Process both Blade and PHP files
+  uvx laravel-i18n-refactor extract . --enable-php -o output.json
+
+  # Change split threshold (split every 200 items)
+  uvx laravel-i18n-refactor extract . -o output.json --split-threshold 200
+
+  # Disable splitting (output everything in a single file)
+  uvx laravel-i18n-refactor extract . -o output.json --split-threshold 0
+
+  # Change context lines (7 lines: 3 before + target + 3 after)
+  uvx laravel-i18n-refactor extract . -o output.json --context-lines 7
+
+  # Disable context output
+  uvx laravel-i18n-refactor extract . -o output.json --context-lines 0
+
+  # Change minimum byte length (exclude strings with less than 3 bytes)
+  uvx laravel-i18n-refactor extract . -o output.json --min-bytes 3
+
+  # Include hidden directories in search
+  uvx laravel-i18n-refactor extract . --include-hidden
 ```
 
 ### Automatic Exclusions
@@ -94,7 +146,12 @@ The tool generates a JSON file with the following structure:
           {
             "line": 10,
             "column": 5,
-            "length": 25
+            "length": 25,
+            "context": [
+              "    <div>",
+              "        <h1>Extracted string content</h1>",
+              "    </div>"
+            ]
           }
         ]
       }
@@ -103,6 +160,28 @@ The tool generates a JSON file with the following structure:
 ]
 ```
 
+### Automatic File Splitting
+
+When extracting a large number of strings, the output is automatically split into multiple files:
+
+- **Default**: Split every 100 items
+- **Split Example**: `output.json` → `output-01.json`, `output-02.json`, `output-03.json`, ...
+- **Customization**: Use `--split-threshold` option to change the threshold
+- **Disable Splitting**: Use `--split-threshold 0` to output everything in a single file
+
+```bash
+# Default (split every 100 items)
+uvx laravel-i18n-refactor extract . -o output.json
+
+# Custom threshold (split every 200 items)
+uvx laravel-i18n-refactor extract . -o output.json --split-threshold 200
+
+# Disable splitting (single file)
+uvx laravel-i18n-refactor extract . -o output.json --split-threshold 0
+```
+
+**Note**: When outputting to stdout (without `-o` option), no splitting occurs.
+
 ### Field Descriptions
 
 - `text`: The extracted string content (preserves newlines, tabs, spaces, and escape sequences)
@@ -110,6 +189,9 @@ The tool generates a JSON file with the following structure:
 - `file`: File path (relative to the search directory)
 - `positions`: Array of positions within the same file
 - `line`: Line number (1-based)
+- `column`: Column number (0-based)
+- `length`: String length (character count)
+- `context`: Context lines (target line and 2 lines before/after, total 5 lines, may be less at file boundaries)
 - `column`: Column number (0-based)
 - `length`: String length (character count)
 

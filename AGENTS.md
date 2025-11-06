@@ -6,11 +6,11 @@
 **Language:** Python 3.10+ | **Package:** PyPI via `uvx laravel-i18n-refactor`
 **Entry:** `src/refactor/main.py` → `actions/extract.py` → Processors → JSON output
 
-## ⚠️ Critical Development Rule
+## ⚠️ Critical Development Rules
 
-**PYTHON ENVIRONMENT MANAGEMENT**
+### Python Environment Management
 
-This project uses a pre-configured virtual environment in the project root:
+**IMPORTANT:** This project uses a pre-configured virtual environment in the project root:
 
 - ✅ **ALWAYS** use `venv/bin/python` from the project root
 - ✅ Use `venv/bin/black` and `venv/bin/pylint` for code quality checks
@@ -21,15 +21,14 @@ This project uses a pre-configured virtual environment in the project root:
 - ❌ **DO NOT** run PyPI upload commands (`twine upload`)
 - ❌ **DO NOT** perform any external operations that affect repositories or services
 
-**Reason:**
-- The developer has already prepared the `venv` directory with all necessary dependencies
-- AI agents should NOT modify the Python environment
-- Building and publishing to PyPI are critical operations that MUST be performed by the developer
-- `uv` is only for end-users (`uvx laravel-i18n-refactor`)
+**Reason:** Developer manages environment; building and publishing to PyPI are critical operations that MUST be performed by the developer; `uv` is only for end-users installing from PyPI (`uvx laravel-i18n-refactor`); development must use the pre-configured environment for consistency.
 
-## Architecture at a Glance
+**Note:** All dependencies are already installed in `venv/`. DO NOT run `pip install` as an agent.
 
-```text
+## Architecture Overview
+
+### Processing Flow
+```
 User Input (directory + pattern)
     ↓
 main.py (argparse CLI)
@@ -43,34 +42,129 @@ file_finder.py (glob + Laravel auto-exclusions)
     ↓
 string_collector.py (deduplication + consolidation)
     ↓
-JSON output (text + occurrences with positions)
+output_formatter.py (JSON output + auto-splitting)
 ```
 
-## Core Processing Logic
+### Two-Track Processing Model
 
-### File Routing
+Files are routed by extension:
+- **`.blade.php`** → `BladeProcessor`: Parses HTML with BeautifulSoup (lxml), extracts text nodes/attributes/`<script>` strings
+- **`.php`** → `PHPProcessor`: Manual tokenization (Python AST incompatible with Blade syntax), context-aware filtering
 
-- **`.blade.php`** → `BladeProcessor`: HTML parsing via BeautifulSoup (lxml), extracts text nodes/attributes/`<script>` strings
-- **`.php`** → `PHPProcessor`: Manual tokenization (no AST - Blade syntax incompatible), preserves line/column/length
+**Why manual parsing in PHPProcessor?** Standard Python AST doesn't handle Blade syntax in PHP files. Manual scanning preserves position data (line/column/length) needed for output.
 
-**Why manual parsing?** Python AST cannot handle Blade syntax mixed in PHP files. Manual scanning maintains precise position data required for output format.
+**Current approach (NO MASKING):**
+- Parse original content directly with BeautifulSoup
+- Filter excluded patterns afterwards using `_should_exclude_text()` and `_is_in_excluded_range()`
+- Position accuracy: 97% (3% are file boundary cases with fewer context lines)
 
-### Exclusion System (Critical)
+## Command Line Options
 
-**Blade excludes:**
+```bash
+# Required
+<directory>              # Target directory
 
-- Translation: `{{ __() }}`, `@lang()`, `{!! trans() !!}`
-- Variables: `{{ $var }}`, `{!! $var !!}`
-- Directives: `@if()`, `@foreach()`, `@php...@endphp`
-- Comments: `<!-- -->`, `{{-- --}}`
+# File Selection
+-n, --name PATTERN       # File pattern (default: "**/*.php")
+-e, --exclude DIR        # Exclude directories (multiple, default: node_modules)
+--include-hidden         # Include hidden directories (default: False)
 
-**PHP excludes:**
+# Output Control
+-o, --output FILE        # Output path (default: stdout)
+--split-threshold NUM    # Split every N items (default: 100, 0=disable)
+--context-lines NUM      # Context lines (default: 5, 0=disable)
 
-- Translation: `__()`, `trans()`, `Lang::get()`
-- Logs: `Log::info()`, `logger()`, `error_log()`
-- Console: `echo`, `print`, `var_dump()`, `dd()`, `dump()`
-- Commands: `$this->info()`, `$this->error()`
-- Array keys: `'key' =>` (values extracted)
+# Processing Control
+--enable-blade           # Process .blade.php (default: True)
+--disable-blade          # Skip .blade.php
+--enable-php             # Process .php (default: False)
+--disable-php            # Skip .php
+
+# Filtering
+--min-bytes NUM          # Minimum byte length (default: 2)
+```
+
+## Output Format
+
+**⚠️ IMPORTANT: Automatic File Splitting**
+
+Output files are **automatically split** when extracting many strings:
+- **Default threshold**: 100 items per file
+- **File naming**: `output.json` → `output-01.json`, `output-02.json`, `output-03.json`, ...
+- **Control**: `--split-threshold NUM` to customize (0 = disable splitting)
+- **Implementation**: `src/refactor/utils/output_formatter.py` (`_write_to_files()`)
+
+**When validating or testing output:**
+- Always check for numbered files (e.g., `output-1.json`, `output-2.json`)
+- List directory contents to find the latest file
+- Use the highest-numbered file for validation
+
+```json
+[
+  {
+    "text": "extracted string",
+    "occurrences": [
+      {
+        "file": "/absolute/path/file.php",
+        "positions": [
+          {
+            "line": 10,        // 1-based
+            "column": 5,       // 0-based
+            "length": 15,      // character count
+            "context": [       // 5 lines (2 before + target + 2 after)
+              "    previous line",
+              "    target line with extracted string",
+              "    next line"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
+```
+
+**Fields:**
+- `line`: 1-based line number
+- `column`: 0-based column position
+- `length`: character count (not bytes)
+- `context`: Target line + 2 lines before/after (5 total, less at boundaries)
+
+## Smart Exclusion System
+
+### Blade Excludes
+
+**Translation functions:**
+- `{{ __() }}`, `{{ trans() }}`, `@lang()`
+- `{!! __() !!}`, `{!! trans() !!}`
+
+**Variables:**
+- `{{ $variable }}`, `{!! $variable !!}`
+
+**Directives:**
+- `@if()`, `@foreach()`, `@endif`, `@endforeach`
+- `@php...@endphp`
+
+**Comments:**
+- `<!-- HTML comments -->`
+- `{{-- Blade comments --}}`
+
+### PHP Excludes
+
+**Translation functions:**
+- `__()`, `trans()`, `Lang::get()`
+
+**Logs:**
+- `Log::info()`, `logger()`, `error_log()`
+
+**Console output:**
+- `echo`, `print`, `var_dump()`, `dd()`, `dump()`
+
+**Command output:**
+- `$this->info()`, `$this->error()`, `$this->warn()`
+
+**Array keys:**
+- `'key' => 'value'` (values are extracted, keys are excluded)
 
 **Context filtering:** PHPProcessor checks 200 chars before string literals using regex patterns (see `_should_include_string()`).
 
@@ -79,8 +173,7 @@ JSON output (text + occurrences with positions)
 - Searches for `composer.json` to identify Laravel project roots
 - Auto-excludes: `vendor/`, `node_modules/`, `storage/`, `bootstrap/cache/`, `public/`
 - See `LARAVEL_AUTO_EXCLUDE_DIRS` in `file_finder.py`
-
-## Development Commands
+- User-specified `-e` exclusions layer on top
 
 ## Development Commands
 
@@ -88,7 +181,7 @@ JSON output (text + occurrences with positions)
 # Run locally using project venv
 venv/bin/python src/refactor/main.py extract <dir> -o output.json
 
-# Code quality (line-length=160)
+# Code quality (line-length=160, see pyproject.toml)
 venv/bin/black src/
 venv/bin/pylint src/
 
@@ -96,27 +189,13 @@ venv/bin/pylint src/
 mkdir -p /tmp/test-laravel/resources/views
 echo '<p>Test 日本語</p>' > /tmp/test-laravel/resources/views/test.blade.php
 venv/bin/python src/refactor/main.py extract /tmp/test-laravel -o test-output.json
-cat test-output.json | python -m json.tool
+
+# Validate output (check for numbered files!)
+ls -la output/
+venv/bin/python scripts/validate_output.py output/output-N.json
 ```
 
-**Note:** All dependencies are already installed in `venv/`. DO NOT run `pip install` as an agent.
-
-## PyPI Release Workflow
-
-```bash
-# 1. TestPyPI (always first)
-rm -rf dist/ src/*.egg-info
-venv/bin/python -m build
-venv/bin/twine upload --repository testpypi dist/*
-uvx --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ laravel_i18n_refactor --help
-
-# 2. Production PyPI (after validation)
-venv/bin/twine upload dist/*
-```
-
-See `Documents/pypiリリース方法.md` for detailed steps.
-
-## Code Conventions
+## Key Implementation Details
 
 ### Position Data Format
 
@@ -127,108 +206,102 @@ All processors return: `List[Tuple[str, int, int, int]]`
 - **Column:** 0-based (programming standard)
 - **Length:** character count (not bytes)
 
-### Output Structure
-
-```json
-[
-  {
-    "text": "extracted string",
-    "occurrences": [
-      {
-        "file": "/absolute/path/file.php",
-        "positions": [{"line": 10, "column": 5, "length": 15}]
-      }
-    ]
-  }
-]
-```
-
 ### Character Filtering
 
 Both processors strip whitespace and skip:
-
 - Empty/whitespace-only strings
 - ASCII-only digits/symbols (e.g., "123", "===")
 - **Exception:** Non-ASCII chars (Japanese, emoji) bypass symbol check
 
-**Check:** `_contains_non_ascii()` → `ord(char) > 127`
+**Implementation:** `_contains_non_ascii()` → `ord(char) > 127`
+
+### File Organization
+
+```
+src/refactor/
+├── main.py                    # CLI entry (argparse)
+├── actions/
+│   └── extract.py             # Orchestration logic
+├── mods/
+│   ├── blade_processor.py     # Blade template extraction
+│   └── php_processor.py       # PHP file extraction
+└── utils/
+    ├── file_finder.py         # Glob + Laravel exclusions
+    ├── output_formatter.py    # JSON output + auto-splitting
+    ├── string_processor.py    # Position calculation utilities
+    └── php_analyzer.py        # PHP code analysis
+```
+
+### String Position Calculation
+
+Both processors calculate positions from original file content, then adjust after stripping:
+
+```python
+# Extract with position from original content
+text, line, column, length = processor.extract()
+
+# Adjust after stripping whitespace
+stripped_text, adjusted_column, stripped_length = StringProcessor.adjust_text_position(text, column)
+```
+
+**Current accuracy:** 97% (3% are file boundary cases with fewer context lines)
 
 ## Debugging Checklist
 
 ### Missing Strings?
 
-1. File auto-excluded? Check `LARAVEL_AUTO_EXCLUDE_DIRS` or `-e` flags
-2. Processor routing: `.blade.php` exact match required (not just `.php`)
-3. Add prints: `_should_exclude_text()` (Blade), `_should_include_string()` (PHP)
-4. Test regex isolation: `re.search(pattern, context)`
+1. **File auto-excluded?** Check `LARAVEL_AUTO_EXCLUDE_DIRS` or `-e` flags
+2. **Processor routing:** `.blade.php` exact match required (not just `.php`)
+3. **Add debug prints:** `_should_exclude_text()` (Blade), `_should_include_string()` (PHP)
+4. **Test regex isolation:** `re.search(pattern, context)`
+
+### Wrong Positions?
+
+- Processors calculate from **original content** (not masked)
+- Use `_find_all_occurrences()` on `self.content`
+- Check `StringProcessor.get_line_column()` for position calculation
+- Verify `adjust_text_position()` for column adjustment after stripping
 
 ### Blade Syntax Leaking?
 
-- Check `_mask_blade_syntax()`: parenthesis depth counter for multi-line directives
-- Verify PHP block removal: `<?php ?>`, `@php @endphp`
+- Check `_should_exclude_text()` with `BLADE_SYNTAX_PATTERN`
+- Verify exclusion ranges in `_identify_excluded_ranges()`
+- Ensure `_is_in_excluded_range()` is called in `process()` method
 
-### Position Calculation Off?
+### Position Calculation Issues?
 
 ```python
-# Processors calculate from original content, adjust after strip
-leading_whitespace = len(text) - len(text.lstrip())
-adjusted_column = column + leading_whitespace
-```
-
-## File Organization
-
-```text
-src/refactor/
-├── main.py              # CLI entry (argparse)
-├── actions/
-│   └── extract.py       # Orchestration logic
-├── mods/
-│   ├── blade_processor.py    # Blade template extraction
-│   ├── php_processor.py      # PHP file extraction
-│   └── string_collector.py   # Deduplication/consolidation
-└── utils/
-    ├── file_finder.py        # Glob + Laravel exclusions
-    └── output_formatter.py   # JSON output
+# Text nodes from BeautifulSoup may include newlines
+# Solution: Split by newlines and process each line separately
+for line_text in text.splitlines():
+    stripped_line = line_text.strip()
+    if stripped_line:
+        for line, column, length in self._find_all_occurrences(stripped_line):
+            results.append((stripped_line, line, column, length))
 ```
 
 ## Critical Constraints
 
-**DO:**
+### DO:
 
-- Preserve line/column indexing conventions (1-based/0-based)
-- Use absolute paths in output (`file_path.resolve()`)
-- Check `Documents/システム仕様書.md` before modifying exclusion patterns
-- Handle individual file failures gracefully (warn, don't halt)
+- **Preserve line/column conventions:** Line is 1-based, column is 0-based
+- **Use absolute paths:** `file_path.resolve()` in output
+- **Consult spec before changes:** Check `Documents/システム仕様書.md` before modifying exclusion patterns
+- **Handle failures gracefully:** Individual file failures print warnings but don't halt processing
+- **Default values in main.py only:** All command-line parameter defaults must be in `main.py` argparse configuration
 
-**DON'T:**
+### DON'T:
 
-- Use Python AST for parsing (Blade incompatible)
-- Add generic error handling without Laravel context awareness
-- Change indexing conventions (breaks tooling compatibility)
-- Modify exclusion patterns without consulting spec
+- **Use Python AST for parsing:** Incompatible with Blade syntax
+- **Modify exclusion patterns without spec review:** Changes must align with `システム仕様書.md`
+- **Change indexing conventions:** Breaks tooling compatibility (line: 1-based, column: 0-based)
+- **Run build/upload commands as agent:** PyPI operations are developer-only
+- **Define defaults outside main.py:** Prevents inconsistency across codebase
 
 ## Project Specifics
 
 - **No test suite:** Manual validation with real Laravel projects
-- **Bilingual docs:** README.md (EN) + README-ja.md (JA) + Documents/システム仕様書.md (spec)
+- **Bilingual docs:** `README.md` (EN) + `README-ja.md` (JA) + `Documents/システム仕様書.md` (spec)
 - **Build system:** Setuptools (`[build-system]` in pyproject.toml)
 - **Entry point:** `[project.scripts]` → `laravel-i18n-refactor` command
 - **Dependencies:** BeautifulSoup4 (lxml parser), no heavy frameworks
-
-## Agent Workflow Optimization
-
-When modifying this codebase:
-
-1. **Context gathering:** Start with `Documents/システム仕様書.md` for exclusion logic
-2. **File routing:** Check extension first (`.blade.php` vs `.php`)
-3. **Position tracking:** Always use original content for calculations, adjust after processing
-4. **Testing:** Create minimal test files in `/tmp`, validate JSON output
-5. **Validation:** Test both processors independently before integration
-
-For bugs/features:
-
-- Blade issues → `blade_processor.py` + `_mask_blade_syntax()`
-- PHP issues → `php_processor.py` + `_should_include_string()`
-- Missing files → `file_finder.py` + `LARAVEL_AUTO_EXCLUDE_DIRS`
-- Wrong positions → Position calculation logic in processors
-- Output format → `string_collector.py` + `output_formatter.py`

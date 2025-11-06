@@ -47,20 +47,72 @@ laravel-i18n-refactor extract .
 laravel-i18n-refactor extract <directory> [OPTIONS]
 
 引数:
-  directory              探索対象ディレクトリ
+  directory                 探索対象ディレクトリ
 
 オプション:
-  -n, --name PATTERN    ファイル名パターン (デフォルト: "**/*.php")
-  -o, --output FILE     出力JSONファイルパス (デフォルト: 標準出力)
-  -e, --exclude DIR     除外するディレクトリ名 (複数回指定可能、デフォルト: node_modules)
-  -h, --help           ヘルプメッセージを表示
+  -n, --name PATTERN        ファイル名パターン（デフォルト: "**/*.php"）
+                            例: "**/*.blade.php", "*.php", "**/*_controller.php"
+
+  -o, --output FILE         出力JSONファイルパス（デフォルト: 標準出力）
+                            指定しない場合は標準出力に出力されます
+
+  -e, --exclude DIR         除外するディレクトリ名（複数回指定可能、デフォルト: node_modules）
+                            例: -e vendor -e storage -e tests
+
+  --split-threshold NUM     出力ファイルの分割閾値（デフォルト: 100）
+                            抽出された文字列がこの数を超えると自動的に複数ファイルに分割
+                            0を指定すると分割を無効化
+
+  --min-bytes NUM           抽出する文字列の最小バイト長（デフォルト: 2）
+                            この値未満のバイト数の文字列は除外されます
+
+  --include-hidden          隠しディレクトリ（.で始まるディレクトリ）を検索対象に含める
+                            デフォルト: False（隠しディレクトリはスキップ）
+
+  --context-lines NUM       出力に含めるコンテキスト行数（デフォルト: 5）
+                            5の場合: 対象行の前2行 + 対象行 + 後2行
+                            0を指定するとコンテキスト出力を無効化
+
+  --enable-blade            .blade.phpファイルの処理を有効化（デフォルト: True）
+
+  --disable-blade           .blade.phpファイルの処理を無効化
+
+  --enable-php              通常の.phpファイルの処理を有効化（デフォルト: False）
+
+  --disable-php             通常の.phpファイルの処理を無効化（これがデフォルト）
+
+  -h, --help                ヘルプメッセージを表示
 
 使用例:
+  # 基本的な使用方法（Bladeファイルのみ、デフォルト設定）
+  uvx laravel-i18n-refactor extract .
+
   # 複数のディレクトリを除外
   uvx laravel-i18n-refactor extract . -e node_modules -e storage -e bootstrap/cache
 
   # 特定のパターンから抽出、複数の除外指定
   uvx laravel-i18n-refactor extract . -n "**/*.blade.php" -e tests -e vendor
+
+  # BladeファイルとPHPファイルの両方を処理
+  uvx laravel-i18n-refactor extract . --enable-php -o output.json
+
+  # 分割閾値を変更（200項目ごとに分割）
+  uvx laravel-i18n-refactor extract . -o output.json --split-threshold 200
+
+  # 分割を無効化（すべて1つのファイルに出力）
+  uvx laravel-i18n-refactor extract . -o output.json --split-threshold 0
+
+  # コンテキスト行数を変更（7行: 前3行 + 対象行 + 後3行）
+  uvx laravel-i18n-refactor extract . -o output.json --context-lines 7
+
+  # コンテキスト出力を無効化
+  uvx laravel-i18n-refactor extract . -o output.json --context-lines 0
+
+  # 最小バイト長を変更（3バイト未満を除外）
+  uvx laravel-i18n-refactor extract . -o output.json --min-bytes 3
+
+  # 隠しディレクトリも含めて検索
+  uvx laravel-i18n-refactor extract . --include-hidden
 ```
 
 ### 自動除外機能
@@ -94,7 +146,12 @@ laravel-i18n-refactor extract <directory> [OPTIONS]
           {
             "line": 10,
             "column": 5,
-            "length": 25
+            "length": 25,
+            "context": [
+              "    <div>",
+              "        <h1>抽出された文字列内容</h1>",
+              "    </div>"
+            ]
           }
         ]
       }
@@ -102,6 +159,28 @@ laravel-i18n-refactor extract <directory> [OPTIONS]
   }
 ]
 ```
+
+### 出力ファイルの自動分割
+
+抽出された文字列が多い場合、出力ファイルは自動的に複数のファイルに分割されます：
+
+- **デフォルト**: 100項目ごとに分割
+- **分割例**: `output.json` → `output-01.json`, `output-02.json`, `output-03.json`, ...
+- **カスタマイズ**: `--split-threshold` オプションで閾値を変更可能
+- **分割無効化**: `--split-threshold 0` で分割を無効化し、すべて1つのファイルに出力
+
+```bash
+# デフォルト（100項目ごとに分割）
+uvx laravel-i18n-refactor extract . -o output.json
+
+# 閾値変更（200項目ごとに分割）
+uvx laravel-i18n-refactor extract . -o output.json --split-threshold 200
+
+# 分割無効化（すべて1つのファイル）
+uvx laravel-i18n-refactor extract . -o output.json --split-threshold 0
+```
+
+**注意**: 標準出力（`-o`オプション未指定）の場合、分割は行われません。
 
 ### フィールドの説明
 
@@ -112,6 +191,7 @@ laravel-i18n-refactor extract <directory> [OPTIONS]
 - `line`: 行番号（1始まり）
 - `column`: カラム番号（0始まり）
 - `length`: 文字列の長さ（文字数）
+- `context`: 該当行とその前後2行のコンテキスト（合計5行、ファイル境界では少なくなる場合あり）
 
 ## 抽出対象
 
