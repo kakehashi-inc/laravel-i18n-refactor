@@ -33,9 +33,9 @@
 
 ### 📝 Exclusion Dictionary Syntax
 
-`.gitignore`-style patterns supported:
+Glob patterns and regular expressions supported:
 
-```
+```text
 # Exact match
 word
 
@@ -43,12 +43,25 @@ word
 data-*
 *-suffix
 
+# Character classes
+[0-9]*
+[a-z]*
+
+# Regular expressions (with regex: prefix)
+regex:^\d+x\d+$        # Dimension patterns (600x600, 1920x1080)
+regex:^\d{3,4}$        # 3-4 digit numbers
+regex:^#[0-9a-fA-F]+$  # Hex color codes
+
 # Negation
 pattern*
 !pattern-keep
 ```
 
-**Implementation:** `ExclusionMatcher.load_from_file(path)` appends patterns (method chaining)
+**Implementation:** `ExclusionMatcher.append_from_file(path)` appends patterns (method chaining)
+
+- Glob patterns: `*` for wildcard, `[0-9]` for character classes
+- Regular expressions: `regex:PATTERN` for Python regex patterns
+- Patterns evaluated in order; later patterns override earlier ones
 
 ## Architecture Overview
 

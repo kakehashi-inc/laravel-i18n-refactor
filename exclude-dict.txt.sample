@@ -9,8 +9,16 @@
 #   *pattern    - Wildcard at start
 #   pattern*    - Wildcard at end
 #   *pattern*   - Wildcard at both ends
+#   [0-9]*      - Character class (glob pattern)
+#   regex:^pattern$  - Regular expression (Python regex syntax)
 #   !pattern    - Negation (include despite previous exclusion)
 #   # comment   - Comment line (ignored)
+#
+# Regular Expression Examples:
+#   regex:^\d+x\d+$         - Dimension patterns (600x600, 1920x1080)
+#   regex:^\d{3,4}$         - 3-4 digit numbers
+#   regex:^#[0-9a-fA-F]+$   - Hex color codes
+#   regex:^\d+\.\d+\.\d+$   - Version numbers (1.2.3)
 
 # ==========================================
 # Common HTML Attributes

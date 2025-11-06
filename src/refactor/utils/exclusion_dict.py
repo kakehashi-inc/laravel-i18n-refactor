@@ -11,11 +11,13 @@ from typing import List, Tuple
 
 class ExclusionMatcher:
     """
-    Matcher for exclusion patterns with .gitignore-like syntax.
+    Matcher for exclusion patterns with .gitignore-like syntax and regex extension.
 
     Supports:
     - Exact matches: "word"
     - Wildcards: "word*", "*word", "*word*"
+    - Character classes: "[0-9]", "[a-z]"
+    - Regular expressions: "regex:^\\d+x\\d+$"
     - Negation: "!pattern" to include despite previous exclusion
     - Comments: "# comment"
     """
@@ -32,8 +34,17 @@ class ExclusionMatcher:
         - Lines starting with # are comments (ignored)
         - Empty lines are ignored
         - Lines starting with ! negate previous exclusions
-        - * is a wildcard matching any characters
+        - Lines starting with "regex:" are treated as regular expressions
+        - * is a wildcard matching any characters (glob pattern)
+        - [0-9], [a-z] are character classes (glob pattern)
         - All other lines are treated as patterns
+
+        Examples:
+            word              # Exact match
+            data-*            # Wildcard pattern
+            [0-9]*x[0-9]*     # Character class pattern
+            regex:^\\d+x\\d+$  # Regular expression pattern
+            !important        # Negation (include despite exclusion)
 
         Args:
             file_path: Path to the exclusion dictionary file
@@ -95,20 +106,52 @@ class ExclusionMatcher:
         """
         Check if text matches pattern.
 
-        Patterns can contain:
-        - * (matches any sequence of characters)
+        Patterns can be:
+        - Regular expressions (starting with "regex:")
+        - Glob patterns with * (matches any sequence of characters)
+        - Glob patterns with character classes ([0-9], [a-z])
         - Exact strings (case-sensitive)
 
         Args:
             text: Text to match
-            pattern: Pattern (may contain *)
+            pattern: Pattern (may contain * or regex:prefix)
 
         Returns:
             True if text matches pattern
         """
+        # Check if pattern is a regular expression
+        if pattern.startswith("regex:"):
+            regex = pattern[6:]  # Remove "regex:" prefix
+            try:
+                return bool(re.match(regex, text))
+            except re.error:
+                # Invalid regex, treat as no match
+                return False
+
         # Convert glob pattern to regex
-        # Escape special regex characters except *
-        regex_pattern = re.escape(pattern).replace(r"\*", ".*")
+        # Escape special regex characters except * and []
+        regex_pattern = ""
+        i = 0
+        while i < len(pattern):
+            char = pattern[i]
+            if char == "*":
+                regex_pattern += ".*"
+            elif char == "[":
+                # Find closing bracket
+                j = i + 1
+                while j < len(pattern) and pattern[j] != "]":
+                    j += 1
+                if j < len(pattern):
+                    # Valid character class
+                    regex_pattern += pattern[i : j + 1]
+                    i = j
+                else:
+                    # No closing bracket, treat as literal
+                    regex_pattern += re.escape(char)
+            else:
+                regex_pattern += re.escape(char)
+            i += 1
+
         # Anchor at start and end for exact matching
         regex_pattern = f"^{regex_pattern}$"
 

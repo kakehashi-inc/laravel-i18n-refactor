@@ -284,16 +284,43 @@ uvx laravel-i18n-refactor extract .
 
 ### Syntax
 
-The exclusion dictionary uses a `.gitignore`-like syntax:
+The exclusion dictionary supports both glob patterns and regular expressions:
 
 | Syntax | Description | Example |
 |--------|-------------|---------|
 | `word` | Exact match (case-sensitive) | `label` excludes "label" |
-| `*` | Matches any characters | `data-*` excludes "data-id", "data-name" |
+| `*` | Wildcard matches any characters | `data-*` excludes "data-id", "data-name" |
+| `[0-9]` | Character class | `[0-9]*` excludes strings starting with digits |
+| `regex:PATTERN` | Regular expression | `regex:^\d+x\d+$` excludes "600x600", "1920x1080" |
 | `!pattern` | Negation (include despite previous exclusion) | `!data-important` includes "data-important" |
 | `# comment` | Comment line (ignored) | `# This is a comment` |
 
-### Examples
+### Regular Expression Patterns
+
+For more precise pattern matching, use the `regex:` prefix:
+
+```text
+# Exclude dimension patterns (e.g., 600x600, 1920x1080)
+regex:^\d+x\d+$
+
+# Exclude 3-4 digit numbers only
+regex:^\d{3,4}$
+
+# Exclude uppercase 2-3 letter codes
+regex:^[A-Z]{2,3}$
+
+# Exclude hex color codes
+regex:^#[0-9a-fA-F]{3,6}$
+
+# Exclude version numbers
+regex:^\d+\.\d+\.\d+$
+```
+
+**Note**: Regular expressions are evaluated as Python regex patterns. Invalid regex patterns are silently ignored.
+
+### Pattern Examples
+
+**Glob patterns:**
 
 ```text
 # Exclude HTML attributes
@@ -318,6 +345,19 @@ placeholder
 # Configuration keys
 *_config
 *.env
+```
+
+**Regular expression patterns:**
+
+```text
+# Exclude dimension patterns (600x600, 1920x1080)
+regex:^\d+x\d+$
+
+# Exclude hex color codes
+regex:^#[0-9a-fA-F]{3,6}$
+
+# Exclude version numbers
+regex:^\d+\.\d+\.\d+$
 ```
 
 ### Embedded Exclusion Dictionary

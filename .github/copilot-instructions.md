@@ -41,7 +41,7 @@ CLI tool extracting hardcoded strings from Laravel projects (Blade templates and
 
 ### 📝 Exclusion Dictionary Syntax
 
-The tool supports `.gitignore`-style exclusion patterns:
+The tool supports glob patterns and regular expressions:
 
 ```text
 # Comments (lines starting with #)
@@ -53,6 +53,15 @@ data-*        # Matches data-id, data-name, etc.
 *-icon        # Matches search-icon, menu-icon, etc.
 prefix*       # Matches prefixAny
 
+# Character classes
+[0-9]*        # Matches strings starting with digits
+[a-z]*        # Matches strings starting with lowercase letters
+
+# Regular expressions (with regex: prefix)
+regex:^\d+x\d+$        # Dimension patterns (600x600, 1920x1080)
+regex:^\d{3,4}$        # 3-4 digit numbers
+regex:^#[0-9a-fA-F]+$  # Hex color codes
+
 # Negation (re-include despite previous exclusion)
 data-*         # Exclude all data-* patterns
 !data-label    # But include data-label
@@ -60,9 +69,11 @@ data-*         # Exclude all data-* patterns
 
 **Implementation:** `ExclusionMatcher` class in `src/refactor/utils/exclusion_dict.py`
 
-- `load_from_file(path)`: Append patterns from file (method chaining)
+- `append_from_file(path)`: Append patterns from file (method chaining)
 - `should_exclude(text)`: Check if text matches any exclusion pattern
 - Patterns evaluated in order; later patterns override earlier ones
+- Glob patterns: `*` for wildcard, `[0-9]` for character classes
+- Regular expressions: `regex:PATTERN` for Python regex patterns
 
 ## Critical Domain Knowledge
 
