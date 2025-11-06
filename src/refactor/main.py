@@ -45,6 +45,13 @@ def create_parser() -> argparse.ArgumentParser:
         dest="include_hidden",
         help="Include hidden directories (directories starting with .) in search (default: False)",
     )
+    extract_parser.add_argument(
+        "--context-lines",
+        type=int,
+        default=5,
+        dest="context_lines",
+        help="Number of context lines to include in output (default: 5, means 2 before + target line + 2 after, 0 to disable)",
+    )
 
     # Future actions can be added here
     # e.g., replace_parser = subparsers.add_parser('replace', ...)
@@ -72,6 +79,7 @@ def main() -> int:
                 split_threshold=args.split_threshold,
                 min_bytes=args.min_bytes,
                 include_hidden=args.include_hidden,
+                context_lines=args.context_lines,
             )
         else:
             parser.error(f"Unknown action: {args.action}")

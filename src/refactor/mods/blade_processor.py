@@ -8,8 +8,8 @@ from pathlib import Path
 from bs4 import BeautifulSoup, Comment, Tag
 from bs4.element import NavigableString
 from ..data_models.extracted_string import ExtractedString
-from ..utils.string_validator import should_extract_string, get_line_column
-from ..utils.php_string_extractor import PHPStringExtractor
+from ..utils.php_analyzer import PHPAnalyzer
+from ..utils.string_processor import StringProcessor
 
 
 class BladeProcessor:
@@ -54,7 +54,7 @@ class BladeProcessor:
         self.content = ""
         self.excluded_ranges: Set[Tuple[int, int]] = set()
         self.php_ranges = []  # List of (start_pos, end_pos) tuples for PHP blocks
-        self.php_extractor = PHPStringExtractor(min_bytes)
+        self.php_analyzer = PHPAnalyzer(min_bytes)
 
     def process(self) -> List[ExtractedString]:
         """
@@ -81,7 +81,7 @@ class BladeProcessor:
         # - _mask_blade_syntax() to remove PHP blocks from HTML parsing
         # - _identify_excluded_ranges() to mark PHP blocks as excluded
         # - _extract_from_php_blocks() to extract strings from PHP code
-        self.php_ranges = self._extract_php_ranges(self.content)
+        self.php_ranges = PHPAnalyzer.extract_php_ranges(self.content, detect_blade=True)
 
         # Step 2: Remove comments
         cleaned_content = self._remove_comments(self.content)
@@ -95,102 +95,25 @@ class BladeProcessor:
         # Step 5: Extract from HTML content
         html_results = self._extract_from_html(masked_content)
 
-        # Step 6: Extract from PHP blocks (uses self.php_ranges)
+        # Step 6: Extract from PHP blocks (already validated by PHPAnalyzer)
         php_results = self._extract_from_php_blocks()
 
-        # Step 7: Combine results
-        results = html_results + php_results
-
-        # Filter and clean extracted strings
-        filtered_results = []
-        for text, line, column, _length in results:
-            # Strip leading/trailing whitespace for validation
-            stripped_text = text.strip()
+        # Step 7: Filter HTML results (PHP results are already validated)
+        filtered_html_results = []
+        for text, line, column, _length in html_results:
+            # Strip whitespace and adjust position
+            stripped_text, adjusted_column, stripped_length = StringProcessor.adjust_text_position(text, column)
 
             # Skip if empty after stripping or contains Blade syntax
             if not stripped_text or self._should_exclude_text(stripped_text):
                 continue
 
-            # Use the stripped text for output
-            # Recalculate position and length based on stripped text
-            stripped_length = len(stripped_text)
+            filtered_html_results.append(ExtractedString(stripped_text, line, adjusted_column, stripped_length))
 
-            # Find the position of the first non-whitespace character
-            leading_whitespace = len(text) - len(text.lstrip())
-            adjusted_column = column + leading_whitespace
+        # Step 8: Convert PHP results to ExtractedString and combine
+        php_extracted = [ExtractedString(text, line, column, length) for text, line, column, length in php_results]
 
-            filtered_results.append(ExtractedString(stripped_text, line, adjusted_column, stripped_length))
-
-        return filtered_results
-
-    def _extract_php_ranges(self, content: str) -> List[Tuple[int, int]]:
-        """
-        Extract all PHP code ranges from Blade content.
-
-        PHP ranges include:
-        - <?php ... ?> (or to end of file if no closing tag)
-        - @php ... @endphp (for Blade files)
-
-        Args:
-            content: File content
-
-        Returns:
-            List of (start_pos, end_pos) tuples representing PHP code ranges
-        """
-        ranges = []
-
-        # Find <?php ... ?> blocks
-        pos = 0
-        while True:
-            # Find opening tag
-            php_start = content.find("<?php", pos)
-            if php_start == -1:
-                break
-
-            # Find closing tag or use end of file
-            php_end = content.find("?>", php_start)
-            if php_end == -1:
-                # No closing tag, PHP goes to end of file
-                ranges.append((php_start, len(content)))
-                break
-            else:
-                ranges.append((php_start, php_end + 2))  # +2 to include ?>
-                pos = php_end + 2
-
-        # Find @php ... @endphp blocks
-        pos = 0
-        while True:
-            blade_php_start = content.find("@php", pos)
-            if blade_php_start == -1:
-                break
-
-            # Check if this is actually @php directive (not part of another word)
-            if blade_php_start > 0 and content[blade_php_start - 1].isalnum():
-                pos = blade_php_start + 4
-                continue
-
-            blade_php_end = content.find("@endphp", blade_php_start)
-            if blade_php_end == -1:
-                # No @endphp, assume it goes to end of file
-                ranges.append((blade_php_start, len(content)))
-                break
-            else:
-                ranges.append((blade_php_start, blade_php_end + 7))  # +7 to include @endphp
-                pos = blade_php_end + 7
-
-        # Sort and merge overlapping ranges
-        if ranges:
-            ranges.sort()
-            merged = [ranges[0]]
-            for start, end in ranges[1:]:
-                if start <= merged[-1][1]:
-                    # Overlapping or adjacent, merge
-                    merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-                else:
-                    merged.append((start, end))
-            return merged
-
-        return ranges
+        return filtered_html_results + php_extracted
 
     def _extract_from_php_blocks(self) -> List[Tuple[str, int, int, int]]:
         """
@@ -206,31 +129,17 @@ class BladeProcessor:
             # Extract PHP block content
             php_content = self.content[start_pos:end_pos]
 
-            # Use PHPStringExtractor to extract string literals
-            string_literals = self.php_extractor.extract_string_literals(php_content)
+            # Use PHPAnalyzer to extract and validate strings
+            validated_strings = self.php_analyzer.extract_and_validate_strings(php_content, StringProcessor.should_extract_string)
 
-            # Validate each extracted string
-            for text, relative_line, relative_column, _length in string_literals:
-                # Strip whitespace
-                stripped_text = text.strip()
-                if not stripped_text:
-                    continue
+            # Convert relative positions to absolute positions in the original file
+            for text, relative_line, relative_column, length in validated_strings:
+                # Calculate absolute position
+                relative_pos = StringProcessor.get_position_from_line_column(php_content, relative_line, relative_column)
+                absolute_pos = start_pos + relative_pos
+                absolute_line, absolute_column = StringProcessor.get_line_column(self.content, absolute_pos)
 
-                # Convert relative position (within PHP block) to absolute position (in file)
-                # Calculate absolute position by adding start_pos offset
-                absolute_pos = start_pos + self.php_extractor.get_position_from_line_column(php_content, relative_line, relative_column)
-
-                # Get absolute line and column in original file
-                absolute_line, absolute_column = get_line_column(self.content, absolute_pos)
-
-                # Use php_extractor for validation (it will check all PHP-specific exclusion patterns)
-                if self.php_extractor.should_include_string(stripped_text, php_content, relative_line, relative_column):
-                    # Adjust for stripped text
-                    leading_whitespace = len(text) - len(text.lstrip())
-                    adjusted_column = absolute_column + leading_whitespace
-                    stripped_length = len(stripped_text)
-
-                    results.append((stripped_text, absolute_line, adjusted_column, stripped_length))
+                results.append((text, absolute_line, absolute_column, length))
 
         return results
 
@@ -308,7 +217,7 @@ class BladeProcessor:
             return True
 
         # Use common validation logic (inverted - should_extract returns True if we want it)
-        return not should_extract_string(text, self.min_bytes)
+        return not StringProcessor.should_extract_string(text, self.min_bytes)
 
     def _remove_comments(self, content: str) -> str:
         """
@@ -350,7 +259,7 @@ class BladeProcessor:
         for pattern in self.BLADE_VARIABLE_PATTERNS:
             for match in re.finditer(pattern, content):
                 start = match.start()
-                end = self._find_closing_brace(content, start)
+                end = self._find_closing_bracket(content, start)
                 if end > start:
                     self.excluded_ranges.add((start, end))
 
@@ -365,43 +274,30 @@ class BladeProcessor:
             self.excluded_ranges.add((start, end))
 
     def _find_closing_bracket(self, content: str, start: int) -> int:
-        """Find closing bracket/brace for a function call."""
-        # Look for {{ or {!!
+        """Find closing bracket/brace for a function call or variable expansion."""
+        # Look for opening {{ or {!!
         i = start
-        while i < len(content) and content[i] != "(":
+        while i < len(content) and content[i] not in ("(", "{"):
             i += 1
 
         if i >= len(content):
             return start
 
-        # Find matching closing parenthesis
-        depth = 1
-        i += 1
-        while i < len(content) and depth > 0:
-            if content[i] == "(":
-                depth += 1
-            elif content[i] == ")":
-                depth -= 1
+        # If we found a parenthesis, match it first
+        if content[i] == "(":
+            depth = 1
             i += 1
+            while i < len(content) and depth > 0:
+                if content[i] == "(":
+                    depth += 1
+                elif content[i] == ")":
+                    depth -= 1
+                i += 1
 
         # Find closing }} or !!}
         while i < len(content):
             if content[i : i + 2] == "}}" or content[i : i + 3] == "!!}":
                 return i + (2 if content[i : i + 2] == "}}" else 3)
-            i += 1
-
-        return i
-
-    def _find_closing_brace(self, content: str, start: int) -> int:
-        """Find closing brace for Blade echo."""
-        i = start + 2  # Skip {{ or {!!
-
-        # Find closing }} or !!}
-        while i < len(content):
-            if content[i : i + 2] == "}}":
-                return i + 2
-            elif content[i : i + 3] == "!!}":
-                return i + 3
             i += 1
 
         return i
@@ -462,7 +358,7 @@ class BladeProcessor:
             if pos == -1:
                 break
 
-            line, column = get_line_column(self.content, pos)
+            line, column = StringProcessor.get_line_column(self.content, pos)
             results.append((line, column, text_length))
             search_pos = pos + text_length
 
@@ -513,7 +409,7 @@ class BladeProcessor:
 
                             # Position of value (after =" )
                             value_pos = pos + len(attr_name) + 2
-                            line, column = get_line_column(self.content, value_pos)
+                            line, column = StringProcessor.get_line_column(self.content, value_pos)
                             results.append((attr_value, line, column, len(attr_value)))
 
                             search_pos = pos + len(search_pattern)
@@ -544,7 +440,7 @@ class BladeProcessor:
                     if pos != -1 and not self._is_in_excluded_range(pos):
                         # Position of string content (excluding quotes)
                         value_pos = pos + 1
-                        line, column = get_line_column(content, value_pos)
+                        line, column = StringProcessor.get_line_column(content, value_pos)
                         results.append((string_value, line, column, len(string_value)))
 
         return results

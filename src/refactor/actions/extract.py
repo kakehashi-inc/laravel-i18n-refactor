@@ -9,7 +9,7 @@ from typing import Optional, List
 
 from refactor.utils.file_finder import find_files_iter
 from refactor.utils.output_formatter import format_output
-from refactor.utils.string_collector import StringCollector
+from refactor.utils.string_processor import StringCollector
 from refactor.mods.blade_processor import BladeProcessor
 from refactor.mods.php_processor import PHPProcessor
 
@@ -89,6 +89,7 @@ def extract_strings(
     split_threshold: int,
     min_bytes: int,
     include_hidden: bool,
+    context_lines: int,
 ) -> int:
     """
     Extract hardcoded strings from Laravel project files.
@@ -101,6 +102,7 @@ def extract_strings(
         split_threshold: Threshold for splitting output into multiple files
         min_bytes: Minimum byte length for string extraction
         include_hidden: Include hidden directories (starting with .) in search
+        context_lines: Number of context lines to include (0 to disable)
 
     Returns:
         Exit code (0 for success, 1 for error)
@@ -187,10 +189,10 @@ def extract_strings(
                 # Determine file type and process accordingly
                 if file_path.suffix == ".php" and ".blade.php" in file_path.name:
                     # Blade template
-                    results = process_blade_file(file_path, collector, min_bytes)
+                    results = process_blade_file(file_path, collector, min_bytes, context_lines)
                 elif file_path.suffix == ".php":
                     # Regular PHP file
-                    results = process_php_file(file_path, collector, min_bytes)
+                    results = process_php_file(file_path, collector, min_bytes, context_lines)
                 else:
                     # Skip non-PHP files
                     continue
@@ -233,7 +235,7 @@ def extract_strings(
         return 1
 
 
-def process_blade_file(file_path: Path, collector: StringCollector, min_bytes: int) -> int:
+def process_blade_file(file_path: Path, collector: StringCollector, min_bytes: int, context_lines: int) -> int:
     """
     Process a Blade template file.
 
@@ -241,6 +243,7 @@ def process_blade_file(file_path: Path, collector: StringCollector, min_bytes: i
         file_path: Path to the Blade file
         collector: StringCollector instance
         min_bytes: Minimum byte length for string extraction
+        context_lines: Number of context lines to include (0 to disable)
 
     Returns:
         Number of strings extracted
@@ -248,13 +251,22 @@ def process_blade_file(file_path: Path, collector: StringCollector, min_bytes: i
     processor = BladeProcessor(file_path, min_bytes)
     results = processor.process()
 
+    # Read file content for context extraction if needed
+    file_lines = None
+    if context_lines > 0:
+        with open(file_path, "r", encoding="utf-8") as f:
+            file_lines = f.readlines()
+
     for extracted in results:
-        collector.add_string(extracted.text, file_path, extracted.line, extracted.column, extracted.length)
+        context = None
+        if context_lines > 0 and file_lines is not None:
+            context = extract_context_lines(file_lines, extracted.line, context_lines)
+        collector.add_string(extracted.text, file_path, extracted.line, extracted.column, extracted.length, context)
 
     return len(results)
 
 
-def process_php_file(file_path: Path, collector: StringCollector, min_bytes: int) -> int:
+def process_php_file(file_path: Path, collector: StringCollector, min_bytes: int, context_lines: int) -> int:
     """
     Process a PHP file.
 
@@ -262,6 +274,7 @@ def process_php_file(file_path: Path, collector: StringCollector, min_bytes: int
         file_path: Path to the PHP file
         collector: StringCollector instance
         min_bytes: Minimum byte length for string extraction
+        context_lines: Number of context lines to include (0 to disable)
 
     Returns:
         Number of strings extracted
@@ -269,7 +282,47 @@ def process_php_file(file_path: Path, collector: StringCollector, min_bytes: int
     processor = PHPProcessor(file_path, min_bytes)
     results = processor.process()
 
+    # Read file content for context extraction if needed
+    file_lines = None
+    if context_lines > 0:
+        with open(file_path, "r", encoding="utf-8") as f:
+            file_lines = f.readlines()
+
     for extracted in results:
-        collector.add_string(extracted.text, file_path, extracted.line, extracted.column, extracted.length)
+        context = None
+        if context_lines > 0 and file_lines is not None:
+            context = extract_context_lines(file_lines, extracted.line, context_lines)
+        collector.add_string(extracted.text, file_path, extracted.line, extracted.column, extracted.length, context)
 
     return len(results)
+
+
+def extract_context_lines(file_lines: List[str], target_line: int, context_lines: int) -> List[str]:
+    """
+    Extract context lines around a target line.
+
+    Args:
+        file_lines: List of all lines in the file
+        target_line: Target line number (1-based)
+        context_lines: Total number of lines to extract (e.g., 5 means 2 before + target + 2 after)
+
+    Returns:
+        List of context lines (without trailing newlines)
+    """
+    # Calculate before and after counts
+    # For context_lines=5: 2 before, 1 target, 2 after
+    # For context_lines=3: 1 before, 1 target, 1 after
+    # For odd numbers: equal before and after
+    # For even numbers: one more after
+    before_count = (context_lines - 1) // 2
+    after_count = context_lines - 1 - before_count
+
+    # Calculate actual line indices (0-based)
+    target_idx = target_line - 1  # Convert to 0-based
+    start_idx = max(0, target_idx - before_count)
+    end_idx = min(len(file_lines), target_idx + after_count + 1)
+
+    # Extract lines and remove trailing newlines
+    context = [line.rstrip("\n\r") for line in file_lines[start_idx:end_idx]]
+
+    return context
