@@ -41,7 +41,7 @@ def check_output_directory(output_path: Path) -> bool:
         print("\nNo input available. Cannot create directory.", file=sys.stderr)
         return False
 
-    if response.upper() == 'Y':
+    if response.upper() == "Y":
         try:
             output_dir.mkdir(parents=True, exist_ok=True)
             print(f"Created directory: {output_dir}", file=sys.stderr)
@@ -119,8 +119,14 @@ def extract_strings(
         if exclude_dirs is None:
             exclude_dirs = []
 
+        # Check output directory before processing (only if output_path is specified)
+        if output_path:
+            if not check_output_directory(output_path):
+                print("Error: Output directory creation cancelled", file=sys.stderr)
+                return 0
+
         # Initialize collector
-        collector = StringCollector(directory)
+        collector = StringCollector()
 
         # Find files
         print("Searching for files...", file=sys.stderr)
@@ -204,12 +210,6 @@ def extract_strings(
         # Get consolidated results
         print("Consolidating results...", file=sys.stderr)
         results = collector.get_results()
-
-        # Check output directory before writing (only if output_path is specified)
-        if output_path:
-            if not check_output_directory(output_path):
-                print("Error: Output directory creation cancelled", file=sys.stderr)
-                return 1
 
         # Output results
         print("Writing output...", file=sys.stderr)

@@ -15,14 +15,8 @@ class StringCollector:
     Merges identical strings and tracks all their occurrences.
     """
 
-    def __init__(self, base_dir: Path):
-        """
-        Initialize the collector.
-
-        Args:
-            base_dir: Base directory for calculating relative paths
-        """
-        self.base_dir = base_dir
+    def __init__(self):
+        """Initialize the collector."""
         # Dictionary mapping text to list of (file_path, occurrences)
         self.strings: Dict[str, List[Tuple[str, List[StringOccurrence]]]] = {}
 

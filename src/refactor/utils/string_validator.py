@@ -93,19 +93,6 @@ def should_extract_string(text: str, min_bytes: int) -> bool:
     return True
 
 
-def contains_non_ascii(text: str) -> bool:
-    """
-    Check if the text contains non-ASCII characters (e.g., Japanese).
-
-    Args:
-        text: Text to check
-
-    Returns:
-        True if text contains non-ASCII characters
-    """
-    return any(ord(char) > 127 for char in text)
-
-
 def get_line_column(content: str, pos: int) -> tuple[int, int]:
     """
     Calculate line and column number for a position in content.

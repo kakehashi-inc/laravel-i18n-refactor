@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup, Comment, Tag
 from bs4.element import NavigableString
 from ..data_models.extracted_string import ExtractedString
 from ..utils.string_validator import should_extract_string, get_line_column
+from ..utils.php_string_extractor import PHPStringExtractor
 
 
 class BladeProcessor:
@@ -53,10 +54,21 @@ class BladeProcessor:
         self.content = ""
         self.excluded_ranges: Set[Tuple[int, int]] = set()
         self.php_ranges = []  # List of (start_pos, end_pos) tuples for PHP blocks
+        self.php_extractor = PHPStringExtractor(min_bytes)
 
     def process(self) -> List[ExtractedString]:
         """
         Process the Blade file and extract hardcoded strings.
+
+        Processing flow:
+        1. Read file content
+        2. Extract PHP block ranges (<?php...?>, @php...@endphp) - calculated once, reused everywhere
+        3. Remove comments
+        4. Mask Blade directives and PHP blocks (using pre-calculated ranges)
+        5. Identify excluded ranges for HTML parsing
+        6. Extract strings from HTML content
+        7. Extract strings from PHP blocks (using PHPStringExtractor)
+        8. Combine and filter results
 
         Returns:
             List of ExtractedString objects
@@ -65,24 +77,33 @@ class BladeProcessor:
         with open(self.file_path, "r", encoding="utf-8") as f:
             self.content = f.read()
 
-        # Extract PHP code ranges for context-aware exclusions
+        # Step 1: Extract PHP code ranges ONCE - will be reused by:
+        # - _mask_blade_syntax() to remove PHP blocks from HTML parsing
+        # - _identify_excluded_ranges() to mark PHP blocks as excluded
+        # - _extract_from_php_blocks() to extract strings from PHP code
         self.php_ranges = self._extract_php_ranges(self.content)
 
-        # Remove comments first
+        # Step 2: Remove comments
         cleaned_content = self._remove_comments(self.content)
 
-        # Remove/mask Blade syntax before HTML parsing
+        # Step 3: Mask Blade syntax (uses self.php_ranges)
         masked_content = self._mask_blade_syntax(cleaned_content)
 
-        # Identify excluded ranges (Blade constructs) - still needed for {{ }} patterns
+        # Step 4: Identify excluded ranges (uses self.php_ranges)
         self._identify_excluded_ranges(masked_content)
 
-        # Parse HTML and extract strings
-        results = self._extract_from_html(masked_content)
+        # Step 5: Extract from HTML content
+        html_results = self._extract_from_html(masked_content)
+
+        # Step 6: Extract from PHP blocks (uses self.php_ranges)
+        php_results = self._extract_from_php_blocks()
+
+        # Step 7: Combine results
+        results = html_results + php_results
 
         # Filter and clean extracted strings
         filtered_results = []
-        for text, line, column, length in results:
+        for text, line, column, _length in results:
             # Strip leading/trailing whitespace for validation
             stripped_text = text.strip()
 
@@ -171,42 +192,47 @@ class BladeProcessor:
 
         return ranges
 
-    def _is_in_php_block(self, position: int) -> bool:
+    def _extract_from_php_blocks(self) -> List[Tuple[str, int, int, int]]:
         """
-        Check if a position is within a PHP code block.
-
-        Args:
-            position: Character position in content
+        Extract strings from PHP code blocks in Blade templates.
 
         Returns:
-            True if position is within a PHP block
+            List of tuples: (text, line, column, length)
         """
-        for start, end in self.php_ranges:
-            if start <= position < end:
-                return True
-        return False
+        results = []
 
-    def _get_position_from_line_column(self, content: str, line: int, column: int) -> int:
-        """
-        Get position in content from line and column.
+        # Process each PHP range
+        for start_pos, end_pos in self.php_ranges:
+            # Extract PHP block content
+            php_content = self.content[start_pos:end_pos]
 
-        Args:
-            content: Full content
-            line: Line number (1-based)
-            column: Column number (0-based)
+            # Use PHPStringExtractor to extract string literals
+            string_literals = self.php_extractor.extract_string_literals(php_content)
 
-        Returns:
-            Position in content, or -1 if invalid
-        """
-        lines = content.split("\n")
-        if line < 1 or line > len(lines):
-            return -1
+            # Validate each extracted string
+            for text, relative_line, relative_column, _length in string_literals:
+                # Strip whitespace
+                stripped_text = text.strip()
+                if not stripped_text:
+                    continue
 
-        # Calculate position
-        pos = sum(len(lines[i]) + 1 for i in range(line - 1))  # +1 for newline
-        pos += column
+                # Convert relative position (within PHP block) to absolute position (in file)
+                # Calculate absolute position by adding start_pos offset
+                absolute_pos = start_pos + self.php_extractor.get_position_from_line_column(php_content, relative_line, relative_column)
 
-        return pos
+                # Get absolute line and column in original file
+                absolute_line, absolute_column = get_line_column(self.content, absolute_pos)
+
+                # Use php_extractor for validation (it will check all PHP-specific exclusion patterns)
+                if self.php_extractor.should_include_string(stripped_text, php_content, relative_line, relative_column):
+                    # Adjust for stripped text
+                    leading_whitespace = len(text) - len(text.lstrip())
+                    adjusted_column = absolute_column + leading_whitespace
+                    stripped_length = len(stripped_text)
+
+                    results.append((stripped_text, absolute_line, adjusted_column, stripped_length))
+
+        return results
 
     def _mask_blade_syntax(self, content: str) -> str:
         """
@@ -218,7 +244,18 @@ class BladeProcessor:
         Returns:
             Content with Blade syntax masked
         """
-        # Mask Blade directives with parentheses (@if(...), @foreach(...), etc.)
+        # Step 1: Mask PHP blocks using pre-calculated ranges
+        # Build masked content by copying non-PHP parts
+        if self.php_ranges:
+            parts = []
+            last_end = 0
+            for start, end in self.php_ranges:
+                parts.append(content[last_end:start])
+                last_end = end
+            parts.append(content[last_end:])
+            content = "".join(parts)
+
+        # Step 2: Mask Blade directives with parentheses (@if(...), @foreach(...), etc.)
         # Handle multi-line arguments with proper parenthesis matching
         result = []
         i = 0
@@ -254,13 +291,7 @@ class BladeProcessor:
                 result.append(content[i])
                 i += 1
 
-        content = "".join(result)
-
-        # Mask PHP blocks
-        content = re.sub(r"<\?php.*?\?>", "", content, flags=re.DOTALL)
-        content = re.sub(r"@php.*?@endphp", "", content, flags=re.DOTALL)
-
-        return content
+        return "".join(result)
 
     def _should_exclude_text(self, text: str) -> bool:
         """
@@ -327,12 +358,11 @@ class BladeProcessor:
         for match in re.finditer(self.BLADE_DIRECTIVE_PATTERN, content):
             self.excluded_ranges.add((match.start(), match.end()))
 
-        # Find PHP blocks
-        for match in re.finditer(r"<\?php.*?\?>", content, flags=re.DOTALL):
-            self.excluded_ranges.add((match.start(), match.end()))
-
-        for match in re.finditer(r"@php.*?@endphp", content, flags=re.DOTALL):
-            self.excluded_ranges.add((match.start(), match.end()))
+        # Add PHP blocks from pre-calculated ranges
+        # Note: These ranges are from the original content, not the masked content
+        # This is intentional as we want to exclude these positions in original content
+        for start, end in self.php_ranges:
+            self.excluded_ranges.add((start, end))
 
     def _find_closing_bracket(self, content: str, start: int) -> int:
         """Find closing bracket/brace for a function call."""
@@ -399,10 +429,10 @@ class BladeProcessor:
             soup = BeautifulSoup(content, "lxml")
 
             # Extract text nodes
-            results.extend(self._extract_text_nodes(soup, content))
+            results.extend(self._extract_text_nodes(soup))
 
             # Extract attribute values
-            results.extend(self._extract_attributes(soup, content))
+            results.extend(self._extract_attributes(soup))
 
             # Extract JavaScript strings
             results.extend(self._extract_script_strings(soup, content))
@@ -413,7 +443,32 @@ class BladeProcessor:
 
         return results
 
-    def _extract_text_nodes(self, soup: BeautifulSoup, content: str) -> List[Tuple[str, int, int, int]]:
+    def _find_all_occurrences(self, text: str) -> List[Tuple[int, int, int]]:
+        """
+        Find all occurrences of text in original content.
+
+        Args:
+            text: Text to search for
+
+        Returns:
+            List of tuples: (line, column, length)
+        """
+        results = []
+        search_pos = 0
+        text_length = len(text)
+
+        while True:
+            pos = self.content.find(text, search_pos)
+            if pos == -1:
+                break
+
+            line, column = get_line_column(self.content, pos)
+            results.append((line, column, text_length))
+            search_pos = pos + text_length
+
+        return results
+
+    def _extract_text_nodes(self, soup: BeautifulSoup) -> List[Tuple[str, int, int, int]]:
         """Extract text nodes from HTML."""
         results = []
 
@@ -425,24 +480,13 @@ class BladeProcessor:
                 if not text or text.isspace():
                     continue
 
-                # Find ALL occurrences of this text in the ORIGINAL content
-                # This is more reliable than trying to track position changes
-                search_pos = 0
-                while True:
-                    pos = self.content.find(text, search_pos)
-                    if pos == -1:
-                        break
-
-                    # Calculate line and column from original content
-                    line, column = get_line_column(self.content, pos)
-                    results.append((text, line, column, len(text)))
-
-                    # Move to next potential occurrence
-                    search_pos = pos + len(text)
+                # Find all occurrences in original content
+                for line, column, length in self._find_all_occurrences(text):
+                    results.append((text, line, column, length))
 
         return results
 
-    def _extract_attributes(self, soup: BeautifulSoup, content: str) -> List[Tuple[str, int, int, int]]:
+    def _extract_attributes(self, soup: BeautifulSoup) -> List[Tuple[str, int, int, int]]:
         """Extract attribute values from HTML tags."""
         results = []
 
@@ -458,7 +502,7 @@ class BladeProcessor:
                     attr_value = tag.attrs[attr_name]
 
                     if isinstance(attr_value, str) and attr_value and not attr_value.isspace():
-                        # Find ALL occurrences in original content
+                        # Find pattern with attribute name and quotes
                         search_pattern = f'{attr_name}="{attr_value}"'
                         search_pos = 0
 
@@ -467,7 +511,8 @@ class BladeProcessor:
                             if pos == -1:
                                 break
 
-                            value_pos = pos + len(attr_name) + 2  # +2 for ="
+                            # Position of value (after =" )
+                            value_pos = pos + len(attr_name) + 2
                             line, column = get_line_column(self.content, value_pos)
                             results.append((attr_value, line, column, len(attr_value)))
 
