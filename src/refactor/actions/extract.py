@@ -10,6 +10,7 @@ from typing import Optional, List
 from refactor.utils.file_finder import find_files_iter
 from refactor.utils.output_formatter import format_output
 from refactor.utils.string_processor import StringCollector
+from refactor.utils.exclusion_dict import load_exclusion_dict
 from refactor.mods.blade_processor import BladeProcessor
 from refactor.mods.php_processor import PHPProcessor
 
@@ -90,6 +91,9 @@ def extract_strings(
     min_bytes: int,
     include_hidden: bool,
     context_lines: int,
+    enable_blade: bool,
+    enable_php: bool,
+    exclude_dict_path: Optional[Path],
 ) -> int:
     """
     Extract hardcoded strings from Laravel project files.
@@ -103,6 +107,9 @@ def extract_strings(
         min_bytes: Minimum byte length for string extraction
         include_hidden: Include hidden directories (starting with .) in search
         context_lines: Number of context lines to include (0 to disable)
+        enable_blade: Enable processing of .blade.php files
+        enable_php: Enable processing of regular .php files
+        exclude_dict_path: Path to exclusion dictionary file
 
     Returns:
         Exit code (0 for success, 1 for error)
@@ -121,14 +128,26 @@ def extract_strings(
         if exclude_dirs is None:
             exclude_dirs = []
 
+        # Load embedded exclusion dictionary (always applied)
+        # From src/refactor/actions/ we go up three levels to project root, then into dict/
+        current_file = Path(__file__)
+        project_root = current_file.parent.parent.parent.parent
+        embedded_dict_file = project_root / "dict" / "embed-exclude-dict.txt"
+        exclude_dict = load_exclusion_dict(embedded_dict_file)
+
+        # Merge with user exclusion dictionary if provided
+        if exclude_dict_path and exclude_dict_path.exists():
+            user_dict = load_exclusion_dict(exclude_dict_path)
+            exclude_dict.update(user_dict)
+
         # Check output directory before processing (only if output_path is specified)
         if output_path:
             if not check_output_directory(output_path):
                 print("Error: Output directory creation cancelled", file=sys.stderr)
                 return 0
 
-        # Initialize collector
-        collector = StringCollector()
+        # Initialize collector with prepared exclude dictionary
+        collector = StringCollector(exclude_dict)
 
         # Find files
         print("Searching for files...", file=sys.stderr)
@@ -187,17 +206,20 @@ def extract_strings(
                 print(f"\r\033[K{progress_msg}", end="", flush=True, file=sys.stderr)
 
                 # Determine file type and process accordingly
-                if file_path.suffix == ".php" and ".blade.php" in file_path.name:
+                is_blade = file_path.suffix == ".php" and ".blade.php" in file_path.name
+                is_php = file_path.suffix == ".php" and ".blade.php" not in file_path.name
+
+                if is_blade and enable_blade:
                     # Blade template
                     results = process_blade_file(file_path, collector, min_bytes, context_lines)
-                elif file_path.suffix == ".php":
+                    processed_count += 1
+                elif is_php and enable_php:
                     # Regular PHP file
                     results = process_php_file(file_path, collector, min_bytes, context_lines)
+                    processed_count += 1
                 else:
-                    # Skip non-PHP files
+                    # Skip if file type is disabled
                     continue
-
-                processed_count += 1
 
             except Exception as e:
                 error_count += 1

@@ -435,6 +435,16 @@ class BladeProcessor:
                 string_value = string_with_quotes[1:-1]
 
                 if string_value and not string_value.isspace():
+                    # Check if this is a JavaScript function argument
+                    # Look for patterns like: functionName('string') or object.method('string')
+                    match_start = match.start()
+                    before_string = script_content[:match_start].rstrip()
+
+                    # Skip if it's a function call argument
+                    # Patterns: func( 'string' or func('string' or object.method( 'string'
+                    if re.search(r"[\w\.]\s*\($", before_string):
+                        continue
+
                     # Find position in original content
                     pos = content.find(string_with_quotes)
                     if pos != -1 and not self._is_in_excluded_range(pos):

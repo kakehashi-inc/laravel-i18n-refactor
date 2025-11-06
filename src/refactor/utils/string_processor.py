@@ -13,7 +13,7 @@ This module combines functionality from:
 """
 
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 from pathlib import Path
 
 from ..data_models.string_occurrence import StringOccurrence
@@ -211,10 +211,18 @@ class StringCollector:
     Merges identical strings and tracks all their occurrences.
     """
 
-    def __init__(self):
-        """Initialize the collector."""
+    def __init__(self, exclude_dict: Set[str]):
+        """
+        Initialize the collector.
+
+        Args:
+            exclude_dict: Set of strings to exclude from collection (already merged: embedded + user)
+        """
         # Dictionary mapping text to list of (file_path, occurrences)
         self.strings: Dict[str, List[Tuple[str, List[StringOccurrence]]]] = {}
+
+        # Use the provided exclusion dictionary (already contains embedded + user exclusions)
+        self.exclude_dict = exclude_dict
 
     def add_string(self, text: str, file_path: Path, line: int, column: int, length: int, context: Optional[List[str]] = None) -> None:
         """
@@ -228,6 +236,12 @@ class StringCollector:
             length: String length in characters
             context: Optional list of context lines (including the target line)
         """
+        # Check exclude dictionary with exact match (case-sensitive)
+        # Only strip whitespace, tabs, newlines for comparison
+        text_stripped = text.strip()
+        if text_stripped in self.exclude_dict:
+            return
+
         # Use absolute path
         absolute_path = str(file_path.resolve())
 

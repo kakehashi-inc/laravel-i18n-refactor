@@ -438,8 +438,27 @@ class PHPAnalyzer:
             return False
 
         current_line = lines[line - 1]
-        before_string = current_line[:column]
-        after_string = current_line[column + len(text) :].lstrip()
+
+        # before_string should NOT include the opening quote
+        # column points to the first character of string content (after opening quote)
+        # So we need to go back 1 position to skip the opening quote
+        if column > 0:
+            before_string = current_line[: column - 1]
+        else:
+            before_string = ""
+
+        # after_string starts from the position after string content
+        # which is the closing quote position
+        # We need to skip the closing quote to get the actual "after" context
+        after_with_quote = current_line[column + len(text) :]
+
+        # Skip the closing quote (either ' or ")
+        if after_with_quote and after_with_quote[0] in ("'", '"'):
+            after_string_raw = after_with_quote[1:]
+        else:
+            after_string_raw = after_with_quote
+
+        after_string = after_string_raw.lstrip()
 
         # Check for exclusion patterns
         if self._is_excluded_by_function_pattern(before_string):
@@ -451,7 +470,7 @@ class PHPAnalyzer:
         if position == -1:
             return True
 
-        if self._is_array_key(before_string, after_string, content, position, len(text)):
+        if self._is_array_key(before_string, after_string, after_string_raw, content, position, len(text)):
             return False
 
         return True
@@ -482,13 +501,24 @@ class PHPAnalyzer:
 
         return False
 
-    def _is_array_key(self, before_string: str, after_string: str, content: str, position: int, text_length: int) -> bool:
+    def _is_array_key(self, before_string: str, after_string: str, after_string_raw: str, content: str, position: int, text_length: int) -> bool:
         """
         Check if the string is an array key (should be excluded).
+
+        In PHP code, if a string literal (enclosed in quotes) is surrounded by [ and ],
+        it is an array key and should be excluded.
+
+        Examples:
+        - $array['key'] - 'key' is an array key
+        - $object->property['key'] - 'key' is an array key
+        - $array['key1']['key2'] - both 'key1' and 'key2' are array keys
+        - ['key' => 'value'] - 'key' is an array key (associative array)
+        - $array['key'] = 'value' - first 'key' is array key, second 'value' is not
 
         Args:
             before_string: Context before the string on the same line
             after_string: Context after the string on the same line (already lstrip)
+            after_string_raw: Raw context after the string (not lstrip, for pattern matching)
             content: Full file content
             position: Character position in content
             text_length: Length of the text
@@ -498,33 +528,25 @@ class PHPAnalyzer:
         """
         before_string_stripped = before_string.rstrip()
 
-        # Pattern 1: Array access - ['key'] or ["key"]
+        # Primary check: String is surrounded by [ and ]
+        # before_string should end with [ and after_string should start with ]
         if before_string_stripped.endswith("[") and after_string.startswith("]"):
             return True
 
-        # Pattern 2: Array access with variable/property
-        if re.search(r"[\w\)\]]\s*\[$", before_string_stripped) and after_string.startswith("]"):
-            return True
-
-        # Pattern 3: Associative array key - same line
+        # Associative array key: 'key' => value (same line)
         if after_string.startswith("=>"):
             return True
 
-        # Pattern 4: Associative array key - multi-line
+        # Associative array key: 'key' => value (multi-line)
         string_end_pos = position + text_length
         remaining_content = content[string_end_pos : string_end_pos + 100]
         remaining_stripped = remaining_content.lstrip()
 
+        # Skip closing quote if present
         if remaining_stripped.startswith("'") or remaining_stripped.startswith('"'):
             remaining_stripped = remaining_stripped[1:].lstrip()
 
         if remaining_stripped.startswith("=>"):
             return True
-
-        # Pattern 5: Array assignment
-        if after_string.startswith("]"):
-            after_bracket = after_string[1:].lstrip()
-            if after_bracket.startswith("=") and not after_bracket.startswith("=="):
-                return True
 
         return False

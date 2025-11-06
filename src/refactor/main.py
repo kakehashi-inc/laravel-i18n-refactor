@@ -28,9 +28,9 @@ def create_parser() -> argparse.ArgumentParser:
     extract_parser.add_argument(
         "--split-threshold",
         type=int,
-        default=200,
+        default=100,
         dest="split_threshold",
-        help="Threshold for splitting output into multiple files (default: 200, only applies when output file is specified)",
+        help="Threshold for splitting output into multiple files (default: 100, only applies when output file is specified)",
     )
     extract_parser.add_argument(
         "--min-bytes",
@@ -51,6 +51,39 @@ def create_parser() -> argparse.ArgumentParser:
         default=5,
         dest="context_lines",
         help="Number of context lines to include in output (default: 5, means 2 before + target line + 2 after, 0 to disable)",
+    )
+    extract_parser.add_argument(
+        "--enable-blade",
+        action="store_true",
+        default=True,
+        dest="enable_blade",
+        help="Enable processing of .blade.php files (default: True)",
+    )
+    extract_parser.add_argument(
+        "--disable-blade",
+        action="store_false",
+        dest="enable_blade",
+        help="Disable processing of .blade.php files",
+    )
+    extract_parser.add_argument(
+        "--enable-php",
+        action="store_true",
+        default=False,
+        dest="enable_php",
+        help="Enable processing of regular .php files (default: False)",
+    )
+    extract_parser.add_argument(
+        "--disable-php",
+        action="store_false",
+        dest="enable_php",
+        help="Disable processing of regular .php files (this is the default)",
+    )
+    extract_parser.add_argument(
+        "--exclude-dict",
+        type=Path,
+        default=None,
+        dest="exclude_dict",
+        help="Path to a text file containing strings to exclude (one per line)",
     )
 
     # Future actions can be added here
@@ -80,6 +113,9 @@ def main() -> int:
                 min_bytes=args.min_bytes,
                 include_hidden=args.include_hidden,
                 context_lines=args.context_lines,
+                enable_blade=args.enable_blade,
+                enable_php=args.enable_php,
+                exclude_dict_path=args.exclude_dict,
             )
         else:
             parser.error(f"Unknown action: {args.action}")
