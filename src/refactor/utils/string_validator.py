@@ -5,6 +5,19 @@ Provides common validation logic shared between Blade and PHP processors.
 """
 
 
+def _contains_non_ascii(text: str) -> bool:
+    """
+    Check if string contains non-ASCII characters (e.g., Japanese, Chinese, emoji).
+
+    Args:
+        text: String to check
+
+    Returns:
+        True if string contains any character with code > 127
+    """
+    return any(ord(char) > 127 for char in text)
+
+
 def should_extract_string(text: str, min_bytes: int) -> bool:
     """
     Determine if a string should be extracted for translation.
@@ -17,14 +30,16 @@ def should_extract_string(text: str, min_bytes: int) -> bool:
     Also excludes strings starting with symbols that cannot be at the beginning
     of sentences or words: # , / $ .
 
-    Also excludes strings with byte length less than min_bytes.
+    For strings containing only ASCII characters, excludes strings with byte length
+    less than min_bytes. However, strings containing non-ASCII characters (e.g.,
+    Japanese, Chinese, emoji) are always extracted regardless of byte length.
 
     If nothing remains after removal, the string is excluded.
     If anything remains, the string should be extracted.
 
     Args:
         text: String to validate
-        min_bytes: Minimum byte length
+        min_bytes: Minimum byte length (only applies to ASCII-only strings)
 
     Returns:
         True if string should be extracted, False otherwise
@@ -36,8 +51,12 @@ def should_extract_string(text: str, min_bytes: int) -> bool:
     # Create a temporary copy for checking
     check_text = text.strip()
 
-    # Check minimum byte length
-    if len(check_text.encode("utf-8")) <= min_bytes:
+    # Check if string contains non-ASCII characters
+    has_non_ascii = _contains_non_ascii(check_text)
+
+    # Check minimum byte length only for ASCII-only strings
+    # Non-ASCII strings (e.g., Japanese, emoji) bypass this check
+    if not has_non_ascii and len(check_text.encode("utf-8")) < min_bytes:
         return False
 
     # Exclude regex patterns (e.g., (?:, (?=, (?!, [0-9], \d, \w, etc.)
@@ -59,6 +78,7 @@ def should_extract_string(text: str, min_bytes: int) -> bool:
 
     # Exclude strings starting with symbols that cannot be at the beginning of sentences/words
     # These are: # , / $ . and various punctuation marks
+    # This applies to all strings, regardless of whether they contain non-ASCII characters
     invalid_start_chars = {"#", ",", "/", "$", ".", "!", ":", ";", ")", "]", "}", "%", "&", "@", "?", "^", "~", "`"}
     if check_text and check_text[0] in invalid_start_chars:
         return False

@@ -37,7 +37,7 @@ def create_parser() -> argparse.ArgumentParser:
         type=int,
         default=2,
         dest="min_bytes",
-        help="Minimum byte length for extracted strings (default: 2, strings with 2 bytes or less will be excluded)",
+        help="Minimum byte length for extracted strings (default: 2, strings with less than 2 bytes will be excluded)",
     )
     extract_parser.add_argument(
         "--include-hidden",
