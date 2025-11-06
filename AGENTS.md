@@ -6,6 +6,27 @@
 **Language:** Python 3.10+ | **Package:** PyPI via `uvx laravel-i18n-refactor`
 **Entry:** `src/refactor/main.py` → `actions/extract.py` → Processors → JSON output
 
+## ⚠️ Critical Development Rule
+
+**PYTHON ENVIRONMENT MANAGEMENT**
+
+This project uses a pre-configured virtual environment in the project root:
+
+- ✅ **ALWAYS** use `venv/bin/python` from the project root
+- ✅ Use `venv/bin/black` and `venv/bin/pylint` for code quality checks
+- ❌ **DO NOT** create temporary virtual environments
+- ❌ **DO NOT** install packages automatically as an agent
+- ❌ **DO NOT** use `uv run`, `uv pip`, or any `uv` commands for development
+- ❌ **DO NOT** run build commands (`python -m build`)
+- ❌ **DO NOT** run PyPI upload commands (`twine upload`)
+- ❌ **DO NOT** perform any external operations that affect repositories or services
+
+**Reason:**
+- The developer has already prepared the `venv` directory with all necessary dependencies
+- AI agents should NOT modify the Python environment
+- Building and publishing to PyPI are critical operations that MUST be performed by the developer
+- `uv` is only for end-users (`uvx laravel-i18n-refactor`)
+
 ## Architecture at a Glance
 
 ```text
@@ -61,35 +82,36 @@ JSON output (text + occurrences with positions)
 
 ## Development Commands
 
-```bash
-# Install dev dependencies
-uv pip install -e ".[dev]"
+## Development Commands
 
-# Local testing (no install)
-python src/refactor/main.py extract <dir> -o output.json
+```bash
+# Run locally using project venv
+venv/bin/python src/refactor/main.py extract <dir> -o output.json
 
 # Code quality (line-length=160)
-black src/
-pylint src/
+venv/bin/black src/
+venv/bin/pylint src/
 
 # Quick test with temp files
 mkdir -p /tmp/test-laravel/resources/views
 echo '<p>Test 日本語</p>' > /tmp/test-laravel/resources/views/test.blade.php
-python src/refactor/main.py extract /tmp/test-laravel -o test-output.json
+venv/bin/python src/refactor/main.py extract /tmp/test-laravel -o test-output.json
 cat test-output.json | python -m json.tool
 ```
+
+**Note:** All dependencies are already installed in `venv/`. DO NOT run `pip install` as an agent.
 
 ## PyPI Release Workflow
 
 ```bash
 # 1. TestPyPI (always first)
 rm -rf dist/ src/*.egg-info
-uv run python -m build
-twine upload --repository testpypi dist/*
+venv/bin/python -m build
+venv/bin/twine upload --repository testpypi dist/*
 uvx --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ laravel_i18n_refactor --help
 
 # 2. Production PyPI (after validation)
-twine upload dist/*
+venv/bin/twine upload dist/*
 ```
 
 See `Documents/pypiリリース方法.md` for detailed steps.

@@ -10,6 +10,31 @@ A CLI tool that extracts hardcoded strings from Laravel projects (Blade template
 - Processors: `blade_processor.py` (HTML/BeautifulSoup), `php_processor.py` (manual string parsing)
 - Utilities: `string_collector.py` (consolidates duplicates), `file_finder.py` (glob + Laravel-aware exclusions)
 
+## Critical Development Rules
+
+### ⚠️ Python Environment Management
+
+**IMPORTANT:** This project uses a pre-configured virtual environment in the project root:
+
+- ✅ **ALWAYS** use `venv/bin/python` from the project root
+- ✅ Use `venv/bin/black` and `venv/bin/pylint` for code quality checks
+- ❌ **DO NOT** create temporary virtual environments
+- ❌ **DO NOT** install packages automatically as an agent
+- ❌ **DO NOT** use `uv run`, `uv pip`, or any `uv` commands for development
+- ❌ **DO NOT** run build commands (`python -m build`)
+- ❌ **DO NOT** run PyPI upload commands (`twine upload`)
+- ❌ **DO NOT** perform any external operations that affect repositories or services
+
+**Reason:**
+- The developer has already prepared the `venv` directory with all necessary dependencies
+- AI agents should NOT modify the Python environment
+- Building and publishing to PyPI are critical operations that MUST be performed by the developer
+- `uv` is only for end-users installing from PyPI (`uvx laravel-i18n-refactor`)
+- Development must use the pre-configured environment for consistency
+- AI agents should NOT modify the Python environment
+- `uv` is only for end-users installing from PyPI (`uvx laravel-i18n-refactor`)
+- Development must use the pre-configured environment for consistency
+
 ## Critical Domain Knowledge
 
 ### Two-Track Processing Model
@@ -36,16 +61,15 @@ Files are routed by extension:
 ### Local Development & Testing
 
 ```bash
-# Install with dev dependencies (uv recommended)
-uv pip install -e ".[dev]"
-
-# Run locally (without install)
-python src/refactor/main.py extract <directory> -o output.json
+# Run locally using project venv
+venv/bin/python src/refactor/main.py extract <directory> -o output.json
 
 # Code quality
-black src/  # line-length=160 (see pyproject.toml)
-pylint src/
+venv/bin/black src/  # line-length=160 (see pyproject.toml)
+venv/bin/pylint src/
 ```
+
+**Note:** All dependencies are already installed in `venv/`. DO NOT run `pip install` as an agent.
 
 ### Testing New String Extraction Logic
 
@@ -53,7 +77,7 @@ Create test files in a temp directory:
 ```bash
 mkdir -p /tmp/test-laravel/resources/views
 echo '<p>Test 日本語</p>' > /tmp/test-laravel/resources/views/test.blade.php
-python src/refactor/main.py extract /tmp/test-laravel -o test-output.json
+venv/bin/python src/refactor/main.py extract /tmp/test-laravel -o test-output.json
 ```
 
 ### PyPI Release Process (See `Documents/pypiリリース方法.md`)
@@ -61,14 +85,16 @@ python src/refactor/main.py extract /tmp/test-laravel -o test-output.json
 1. **TestPyPI first:**
    ```bash
    rm -rf dist/ src/*.egg-info
-   uv run python -m build
-   twine upload --repository testpypi dist/*
-   uvx --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ laravel_i18n_refactor --help
+   venv/bin/python -m build
+   venv/bin/twine upload --repository testpypi dist/*
+   # Test installation (users will use uvx, but we test with pip)
+   pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ laravel-i18n-refactor
+   laravel-i18n-refactor --help
    ```
 
 2. **Production PyPI after validation:**
    ```bash
-   twine upload dist/*
+   venv/bin/twine upload dist/*
    ```
 
 ## Code Conventions
