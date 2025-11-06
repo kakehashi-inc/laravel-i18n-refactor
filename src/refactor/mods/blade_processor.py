@@ -63,12 +63,12 @@ class BladeProcessor:
         Processing flow:
         1. Read file content
         2. Extract PHP block ranges (<?php...?>, @php...@endphp) - calculated once, reused everywhere
-        3. Remove comments
-        4. Mask Blade directives and PHP blocks (using pre-calculated ranges)
-        5. Identify excluded ranges for HTML parsing
-        6. Extract strings from HTML content
-        7. Extract strings from PHP blocks (using PHPStringExtractor)
-        8. Combine and filter results
+        3. Remove comments for HTML parsing
+        4. Identify excluded ranges for post-extraction filtering
+        5. Extract strings from HTML content (NO MASKING - parse original content)
+        6. Extract strings from PHP blocks (using PHPStringExtractor)
+        7. Filter results based on excluded ranges and patterns
+        8. Combine and return results
 
         Returns:
             List of ExtractedString objects
@@ -78,39 +78,46 @@ class BladeProcessor:
             self.content = f.read()
 
         # Step 1: Extract PHP code ranges ONCE - will be reused by:
-        # - _mask_blade_syntax() to remove PHP blocks from HTML parsing
         # - _identify_excluded_ranges() to mark PHP blocks as excluded
         # - _extract_from_php_blocks() to extract strings from PHP code
+        # - _extract_from_html() to avoid parsing PHP as HTML
         self.php_ranges = PHPAnalyzer.extract_php_ranges(self.content, detect_blade=True)
 
-        # Step 2: Remove comments
+        # Step 2: Remove comments for cleaner HTML parsing
         cleaned_content = self._remove_comments(self.content)
 
-        # Step 3: Mask Blade syntax (uses self.php_ranges)
-        masked_content = self._mask_blade_syntax(cleaned_content)
+        # Step 3: Identify excluded ranges (translation functions, variables, etc.)
+        self._identify_excluded_ranges(cleaned_content)
 
-        # Step 4: Identify excluded ranges (uses self.php_ranges)
-        self._identify_excluded_ranges(masked_content)
+        # Step 4: Extract from HTML content (NO MASKING - parse original content)
+        # The parser will see Blade directives, but we'll filter them out afterwards
+        html_results = self._extract_from_html(cleaned_content)
 
-        # Step 5: Extract from HTML content
-        html_results = self._extract_from_html(masked_content)
-
-        # Step 6: Extract from PHP blocks (already validated by PHPAnalyzer)
+        # Step 5: Extract from PHP blocks (already validated by PHPAnalyzer)
         php_results = self._extract_from_php_blocks()
 
-        # Step 7: Filter HTML results (PHP results are already validated)
+        # Step 6: Filter HTML results based on excluded ranges and patterns
         filtered_html_results = []
         for text, line, column, _length in html_results:
             # Strip whitespace and adjust position
             stripped_text, adjusted_column, stripped_length = StringProcessor.adjust_text_position(text, column)
 
-            # Skip if empty after stripping or contains Blade syntax
-            if not stripped_text or self._should_exclude_text(stripped_text):
+            # Skip if empty after stripping
+            if not stripped_text:
+                continue
+
+            # Check if text should be excluded (Blade syntax, etc.)
+            if self._should_exclude_text(stripped_text):
+                continue
+
+            # Check if position is in excluded range (translation functions, variables, PHP blocks)
+            pos = StringProcessor.get_position_from_line_column(self.content, line, adjusted_column)
+            if self._is_in_excluded_range(pos):
                 continue
 
             filtered_html_results.append(ExtractedString(stripped_text, line, adjusted_column, stripped_length))
 
-        # Step 8: Convert PHP results to ExtractedString and combine
+        # Step 7: Convert PHP results to ExtractedString and combine
         php_extracted = [ExtractedString(text, line, column, length) for text, line, column, length in php_results]
 
         return filtered_html_results + php_extracted
@@ -143,68 +150,15 @@ class BladeProcessor:
 
         return results
 
-    def _mask_blade_syntax(self, content: str) -> str:
-        """
-        Mask Blade directives and PHP blocks to prevent them from being extracted.
-
-        Args:
-            content: Content with comments already removed
-
-        Returns:
-            Content with Blade syntax masked
-        """
-        # Step 1: Mask PHP blocks using pre-calculated ranges
-        # Build masked content by copying non-PHP parts
-        if self.php_ranges:
-            parts = []
-            last_end = 0
-            for start, end in self.php_ranges:
-                parts.append(content[last_end:start])
-                last_end = end
-            parts.append(content[last_end:])
-            content = "".join(parts)
-
-        # Step 2: Mask Blade directives with parentheses (@if(...), @foreach(...), etc.)
-        # Handle multi-line arguments with proper parenthesis matching
-        result = []
-        i = 0
-        while i < len(content):
-            # Check for @ directive
-            if content[i] == "@" and i + 1 < len(content) and content[i + 1].isalpha():
-                # Found a directive, extract the name
-                j = i + 1
-                while j < len(content) and (content[j].isalnum() or content[j] == "_"):
-                    j += 1
-
-                # Check if followed by opening parenthesis (skip whitespace)
-                k = j
-                while k < len(content) and content[k] in " \t\n\r":
-                    k += 1
-
-                if k < len(content) and content[k] == "(":
-                    # Find matching closing parenthesis
-                    depth = 1
-                    k += 1
-                    while k < len(content) and depth > 0:
-                        if content[k] == "(":
-                            depth += 1
-                        elif content[k] == ")":
-                            depth -= 1
-                        k += 1
-                    # Skip the entire directive with arguments
-                    i = k
-                else:
-                    # Directive without parentheses, skip just the directive
-                    i = j
-            else:
-                result.append(content[i])
-                i += 1
-
-        return "".join(result)
-
     def _should_exclude_text(self, text: str) -> bool:
         """
         Check if text should be excluded from extraction.
+
+        This method checks for:
+        - Blade syntax ({{, {!!, @directives)
+        - Translation function calls (__(), trans(), etc.)
+        - Variable expansions ($variable)
+        - PHP code snippets
 
         Args:
             text: Text to check
@@ -212,9 +166,19 @@ class BladeProcessor:
         Returns:
             True if text should be excluded
         """
-        # Exclude if contains Blade syntax (safety check)
+        # Exclude if contains Blade syntax
         if self.BLADE_SYNTAX_PATTERN.search(text):
             return True
+
+        # Exclude translation function calls
+        for pattern in self.BLADE_TRANSLATION_PATTERNS:
+            if re.search(pattern, text):
+                return True
+
+        # Exclude variable expansions
+        for pattern in self.BLADE_VARIABLE_PATTERNS:
+            if re.search(pattern, text):
+                return True
 
         # Use common validation logic (inverted - should_extract returns True if we want it)
         return not StringProcessor.should_extract_string(text, self.min_bytes)
@@ -241,8 +205,17 @@ class BladeProcessor:
         """
         Identify position ranges that should be excluded from extraction.
 
+        This method marks ranges in the original content that contain:
+        - Translation functions ({{ __() }}, @lang(), etc.)
+        - Variable expansions ({{ $var }})
+        - Blade directives (@if, @endif, etc.)
+        - PHP blocks (<?php...?>, @php...@endphp)
+
+        These ranges are used in process() to filter out extracted strings
+        that fall within excluded positions.
+
         Args:
-            content: Cleaned content
+            content: Cleaned content (comments removed, but Blade syntax intact)
         """
         self.excluded_ranges = set()
 
@@ -268,8 +241,6 @@ class BladeProcessor:
             self.excluded_ranges.add((match.start(), match.end()))
 
         # Add PHP blocks from pre-calculated ranges
-        # Note: These ranges are from the original content, not the masked content
-        # This is intentional as we want to exclude these positions in original content
         for start, end in self.php_ranges:
             self.excluded_ranges.add((start, end))
 
@@ -313,8 +284,12 @@ class BladeProcessor:
         """
         Extract strings from HTML content.
 
+        NOTE: This method now parses the ORIGINAL content without masking Blade directives.
+        Filtering of Blade syntax is done afterwards in process() using _should_exclude_text()
+        and _is_in_excluded_range() checks.
+
         Args:
-            content: Cleaned HTML content
+            content: Cleaned HTML content (comments removed, but Blade syntax intact)
 
         Returns:
             List of tuples: (text, line, column, length)
@@ -322,6 +297,8 @@ class BladeProcessor:
         results = []
 
         try:
+            # Parse HTML content directly (no masking)
+            # BeautifulSoup will treat Blade directives as text, which we'll filter later
             soup = BeautifulSoup(content, "lxml")
 
             # Extract text nodes
@@ -330,8 +307,8 @@ class BladeProcessor:
             # Extract attribute values
             results.extend(self._extract_attributes(soup))
 
-            # Extract JavaScript strings
-            results.extend(self._extract_script_strings(soup, content))
+            # Extract JavaScript strings - do not pass content, use self.content
+            results.extend(self._extract_script_strings(soup))
 
         except Exception:
             # If parsing fails, return empty results
@@ -376,9 +353,19 @@ class BladeProcessor:
                 if not text or text.isspace():
                     continue
 
-                # Find all occurrences in original content
-                for line, column, length in self._find_all_occurrences(text):
-                    results.append((text, line, column, length))
+                # Split text by newlines to handle multi-line text nodes
+                # Each line will be processed separately
+                for line_text in text.splitlines():
+                    # Strip whitespace from the line
+                    stripped_line = line_text.strip()
+
+                    # Skip empty lines
+                    if not stripped_line:
+                        continue
+
+                    # Find all occurrences of the stripped text in original content
+                    for line, column, length in self._find_all_occurrences(stripped_line):
+                        results.append((stripped_line, line, column, length))
 
         return results
 
@@ -416,7 +403,7 @@ class BladeProcessor:
 
         return results
 
-    def _extract_script_strings(self, soup: BeautifulSoup, content: str) -> List[Tuple[str, int, int, int]]:
+    def _extract_script_strings(self, soup: BeautifulSoup) -> List[Tuple[str, int, int, int]]:
         """Extract string literals from <script> tags."""
         results = []
 
@@ -424,6 +411,21 @@ class BladeProcessor:
             script_content = script.string
             if not script_content:
                 continue
+
+            # Find the position of this script tag in the ORIGINAL content
+            # We need to find where this specific script tag's content appears
+            script_tag_str = str(script)
+            script_tag_pos = self.content.find(script_tag_str)
+            if script_tag_pos == -1:
+                continue
+
+            # Find where the script content starts within the tag
+            # Look for the > after <script...> and before </script>
+            script_opening_end = self.content.find(">", script_tag_pos)
+            if script_opening_end == -1:
+                continue
+
+            script_content_start = script_opening_end + 1
 
             # Find JavaScript string literals
             # Match both single and double quoted strings
@@ -445,12 +447,16 @@ class BladeProcessor:
                     if re.search(r"[\w\.]\s*\($", before_string):
                         continue
 
-                    # Find position in original content
-                    pos = content.find(string_with_quotes)
+                    # Find position in ORIGINAL content, starting from this script tag's content
+                    # Search within a reasonable range from the script content start
+                    search_start = script_content_start
+                    search_end = script_content_start + len(script_content) + 1000  # Add buffer for safety
+                    pos = self.content.find(string_with_quotes, search_start, search_end)
+
                     if pos != -1 and not self._is_in_excluded_range(pos):
                         # Position of string content (excluding quotes)
                         value_pos = pos + 1
-                        line, column = StringProcessor.get_line_column(content, value_pos)
+                        line, column = StringProcessor.get_line_column(self.content, value_pos)
                         results.append((string_value, line, column, len(string_value)))
 
         return results
