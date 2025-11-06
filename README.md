@@ -245,9 +245,93 @@ uvx laravel-i18n-refactor extract . -o output.json --split-threshold 0
 <p>{{ $userName }}</p>
 ```
 
-**PHP extraction:**
-```php
-// Extracted: "This field is required"
+## Exclusion Dictionary
+
+You can exclude specific strings from extraction using an exclusion dictionary file.
+
+### Basic Usage
+
+Create an `exclude-dict.txt` file in your project root, and it will be automatically loaded:
+
+```bash
+# Create exclusion dictionary in project root
+cat > exclude-dict.txt << 'EOF'
+# Comments: lines starting with # are ignored
+
+# Exact matches (case-sensitive)
+label
+class
+style
+name
+
+# Wildcard patterns
+data-*
+autocomplete*
+*-icon
+
+# Negation patterns (starting with !)
+# Re-include strings that were excluded by previous patterns
+!class-name
+!data-important
+
+# Array key patterns
+'*' =>*
+EOF
+
+# Run extraction with exclusion dictionary
+uvx laravel-i18n-refactor extract .
+```
+
+### Syntax
+
+The exclusion dictionary uses a `.gitignore`-like syntax:
+
+| Syntax | Description | Example |
+|--------|-------------|---------|
+| `word` | Exact match (case-sensitive) | `label` excludes "label" |
+| `*` | Matches any characters | `data-*` excludes "data-id", "data-name" |
+| `!pattern` | Negation (include despite previous exclusion) | `!data-important` includes "data-important" |
+| `# comment` | Comment line (ignored) | `# This is a comment` |
+
+### Examples
+
+```text
+# Exclude HTML attributes
+class
+style
+id
+
+# Exclude data-* attributes (but keep specific ones)
+data-*
+!data-label
+!data-message
+
+# Form-related attributes
+name
+type
+value
+placeholder
+
+# But keep user-facing placeholders
+!placeholder-text
+
+# Configuration keys
+*_config
+*.env
+```
+
+### Embedded Exclusion Dictionary
+
+The tool includes an embedded dictionary that excludes common 2-letter language codes (ISO 639-1). This is automatically merged with your custom dictionary.
+
+**Note**: Custom dictionary patterns are evaluated after the embedded dictionary, so negation patterns (`!`) can override embedded exclusions.
+
+```text
+# "en" is excluded by embedded dictionary, but you can include it
+!en
+```
+
+
 'required' => 'This field is required',
 
 // Extracted: "User not found"

@@ -248,6 +248,92 @@ uvx laravel-i18n-refactor extract . -o output.json --split-threshold 0
 <p>{{ $userName }}</p>
 ```
 
+## 除外辞書
+
+特定の文字列を抽出から除外したい場合、除外辞書ファイルを使用できます。
+
+### 基本的な使用方法
+
+プロジェクトルートに `exclude-dict.txt` ファイルを作成すると、自動的に読み込まれます：
+
+```bash
+# プロジェクトルートに除外辞書を作成
+cat > exclude-dict.txt << 'EOF'
+# コメント: # で始まる行は無視されます
+
+# 完全一致（大文字小文字区別あり）
+label
+class
+style
+name
+
+# ワイルドカードパターン
+data-*
+autocomplete*
+*-icon
+
+# 否定パターン（! で始まる）
+# 前のパターンで除外された文字列を再度含める
+!class-name
+!data-important
+
+# 配列キーパターン
+'*' =>*
+EOF
+
+# 除外辞書を使用して抽出実行
+uvx laravel-i18n-refactor extract .
+```
+
+### 構文
+
+除外辞書は `.gitignore` に似た構文を使用します：
+
+| 構文 | 説明 | 例 |
+|------|------|------|
+| `word` | 完全一致（大文字小文字区別あり） | `label` は "label" を除外 |
+| `*` | 任意の文字列にマッチ | `data-*` は "data-id", "data-name" を除外 |
+| `!pattern` | 除外の否定（前のパターンで除外されたものを含める） | `!data-important` は "data-important" を含める |
+| `# comment` | コメント行（無視される） | `# これはコメント` |
+
+### 使用例
+
+```text
+# HTML属性を除外
+class
+style
+id
+
+# data-* 属性を除外（ただし特定のものは含める）
+data-*
+!data-label
+!data-message
+
+# フォーム関連の属性
+name
+type
+value
+placeholder
+
+# But keep user-facing placeholders
+!placeholder-text
+
+# 設定キー
+*_config
+*.env
+```
+
+### 埋め込み除外辞書
+
+ツールには、一般的な2文字の言語コード（ISO 639-1）を除外する埋め込み辞書が含まれています。カスタム辞書と併用されます。
+
+**注意**: カスタム辞書のパターンは埋め込み辞書の後に評価されるため、否定パターン（`!`）で埋め込み辞書の除外を上書きできます。
+
+```text
+# 埋め込み辞書で "en" は除外されますが、これで含めることができます
+!en
+```
+
 **PHP抽出:**
 
 ```php

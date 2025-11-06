@@ -10,7 +10,7 @@ from typing import Optional, List
 from refactor.utils.file_finder import find_files_iter
 from refactor.utils.output_formatter import format_output
 from refactor.utils.string_processor import StringCollector
-from refactor.utils.exclusion_dict import load_exclusion_dict
+from refactor.utils.exclusion_dict import ExclusionMatcher
 from refactor.mods.blade_processor import BladeProcessor
 from refactor.mods.php_processor import PHPProcessor
 
@@ -128,17 +128,19 @@ def extract_strings(
         if exclude_dirs is None:
             exclude_dirs = []
 
-        # Load embedded exclusion dictionary (always applied)
+        # Load exclusion dictionaries
         # From src/refactor/actions/ we go up three levels to project root, then into dict/
         current_file = Path(__file__)
         project_root = current_file.parent.parent.parent.parent
         embedded_dict_file = project_root / "dict" / "embed-exclude-dict.txt"
-        exclude_dict = load_exclusion_dict(embedded_dict_file)
 
-        # Merge with user exclusion dictionary if provided
+        # Initialize ExclusionMatcher and append embedded dictionary first
+        exclude_matcher = ExclusionMatcher()
+        exclude_matcher.append_from_file(embedded_dict_file)
+
+        # Append user dictionary if provided (patterns append after embedded ones)
         if exclude_dict_path and exclude_dict_path.exists():
-            user_dict = load_exclusion_dict(exclude_dict_path)
-            exclude_dict.update(user_dict)
+            exclude_matcher.append_from_file(exclude_dict_path)
 
         # Check output directory before processing (only if output_path is specified)
         if output_path:
@@ -146,8 +148,8 @@ def extract_strings(
                 print("Error: Output directory creation cancelled", file=sys.stderr)
                 return 0
 
-        # Initialize collector with prepared exclude dictionary
-        collector = StringCollector(exclude_dict)
+        # Initialize collector with prepared exclude matcher
+        collector = StringCollector(exclude_matcher)
 
         # Find files
         print("Searching for files...", file=sys.stderr)

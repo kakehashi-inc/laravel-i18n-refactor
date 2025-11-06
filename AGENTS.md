@@ -23,7 +23,32 @@
 
 **Reason:** Developer manages environment; building and publishing to PyPI are critical operations that MUST be performed by the developer; `uv` is only for end-users installing from PyPI (`uvx laravel-i18n-refactor`); development must use the pre-configured environment for consistency.
 
-**Note:** All dependencies are already installed in `venv/`. DO NOT run `pip install` as an agent.
+### 🚫 Embedded Exclusion Dictionary Protection
+
+**CRITICAL:** The embedded exclusion dictionary (`dict/embed-exclude-dict.txt`) must NOT be modified:
+
+- ❌ **DO NOT** add, remove, or modify entries in `dict/embed-exclude-dict.txt`
+- ✅ **ONLY** suggest changes to the developer for review
+- ✅ User customizations go in project root `exclude-dict.txt`
+
+### 📝 Exclusion Dictionary Syntax
+
+`.gitignore`-style patterns supported:
+
+```
+# Exact match
+word
+
+# Wildcards
+data-*
+*-suffix
+
+# Negation
+pattern*
+!pattern-keep
+```
+
+**Implementation:** `ExclusionMatcher.load_from_file(path)` appends patterns (method chaining)
 
 ## Architecture Overview
 

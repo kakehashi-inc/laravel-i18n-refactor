@@ -27,6 +27,43 @@ CLI tool extracting hardcoded strings from Laravel projects (Blade templates and
 
 **Reason:** Developer manages environment; building and publishing to PyPI are critical operations that MUST be performed by the developer; `uv` is only for end-users installing from PyPI (`uvx laravel-i18n-refactor`); development must use the pre-configured environment for consistency.
 
+### 🚫 Embedded Exclusion Dictionary Protection
+
+**CRITICAL:** The embedded exclusion dictionary (`dict/embed-exclude-dict.txt`) contains curated language codes and must NOT be modified without explicit developer approval:
+
+- ❌ **DO NOT** add entries to `dict/embed-exclude-dict.txt`
+- ❌ **DO NOT** remove entries from `dict/embed-exclude-dict.txt`
+- ❌ **DO NOT** modify entries in `dict/embed-exclude-dict.txt`
+- ✅ **ONLY** suggest changes to the developer for review
+- ✅ User customizations should go in `exclude-dict.txt` (project root)
+
+**Reason:** The embedded dictionary is shared across all users and must remain stable. Incorrect modifications can affect all projects using this tool.
+
+### 📝 Exclusion Dictionary Syntax
+
+The tool supports `.gitignore`-style exclusion patterns:
+
+```text
+# Comments (lines starting with #)
+# Exact match (case-sensitive)
+word
+
+# Wildcards
+data-*        # Matches data-id, data-name, etc.
+*-icon        # Matches search-icon, menu-icon, etc.
+prefix*       # Matches prefixAny
+
+# Negation (re-include despite previous exclusion)
+data-*         # Exclude all data-* patterns
+!data-label    # But include data-label
+```
+
+**Implementation:** `ExclusionMatcher` class in `src/refactor/utils/exclusion_dict.py`
+
+- `load_from_file(path)`: Append patterns from file (method chaining)
+- `should_exclude(text)`: Check if text matches any exclusion pattern
+- Patterns evaluated in order; later patterns override earlier ones
+
 ## Critical Domain Knowledge
 
 ### Two-Track Processing Model

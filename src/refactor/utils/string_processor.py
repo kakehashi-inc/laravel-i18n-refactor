@@ -13,10 +13,11 @@ This module combines functionality from:
 """
 
 import re
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 
 from ..data_models.string_occurrence import StringOccurrence
+from .exclusion_dict import ExclusionMatcher
 
 
 class StringProcessor:
@@ -211,18 +212,18 @@ class StringCollector:
     Merges identical strings and tracks all their occurrences.
     """
 
-    def __init__(self, exclude_dict: Set[str]):
+    def __init__(self, exclude_matcher: ExclusionMatcher):
         """
         Initialize the collector.
 
         Args:
-            exclude_dict: Set of strings to exclude from collection (already merged: embedded + user)
+            exclude_matcher: ExclusionMatcher for pattern-based exclusion
         """
         # Dictionary mapping text to list of (file_path, occurrences)
         self.strings: Dict[str, List[Tuple[str, List[StringOccurrence]]]] = {}
 
-        # Use the provided exclusion dictionary (already contains embedded + user exclusions)
-        self.exclude_dict = exclude_dict
+        # Use the provided exclusion matcher
+        self.exclude_matcher = exclude_matcher
 
     def add_string(self, text: str, file_path: Path, line: int, column: int, length: int, context: Optional[List[str]] = None) -> None:
         """
@@ -236,10 +237,10 @@ class StringCollector:
             length: String length in characters
             context: Optional list of context lines (including the target line)
         """
-        # Check exclude dictionary with exact match (case-sensitive)
+        # Check exclude dictionary with pattern matching
         # Only strip whitespace, tabs, newlines for comparison
         text_stripped = text.strip()
-        if text_stripped in self.exclude_dict:
+        if self.exclude_matcher.should_exclude(text_stripped):
             return
 
         # Use absolute path

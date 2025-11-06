@@ -32,6 +32,11 @@ class BladeProcessor:
     # Blade directives (with or without parentheses)
     BLADE_DIRECTIVE_PATTERN = r"@\w+"  # @if, @foreach, @endif, @endforeach, etc.
 
+    # Blade directives with parentheses (generic pattern for all directives with arguments)
+    # Matches @directiveName( where directiveName is one or more word characters
+    # Examples: @include(, @class(, @push(, @component(, @slot(, etc.
+    BLADE_DIRECTIVE_WITH_ARGS_PATTERN = r"@\w+\s*\("
+
     # Pattern to detect if string contains Blade syntax
     BLADE_SYNTAX_PATTERN = re.compile(
         r"@\w+|"  # Blade directives
@@ -63,12 +68,13 @@ class BladeProcessor:
         Processing flow:
         1. Read file content
         2. Extract PHP block ranges (<?php...?>, @php...@endphp) - calculated once, reused everywhere
-        3. Remove comments for HTML parsing
-        4. Identify excluded ranges for post-extraction filtering
-        5. Extract strings from HTML content (NO MASKING - parse original content)
-        6. Extract strings from PHP blocks (using PHPStringExtractor)
-        7. Filter results based on excluded ranges and patterns
-        8. Combine and return results
+        3. Extract Blade directive argument ranges (@include, @component, etc.)
+        4. Remove comments for HTML parsing
+        5. Identify excluded ranges for post-extraction filtering
+        6. Extract strings from HTML content (NO MASKING - parse original content)
+        7. Extract strings from PHP blocks and directive arguments (using PHPAnalyzer)
+        8. Filter results based on excluded ranges and patterns
+        9. Combine and return results
 
         Returns:
             List of ExtractedString objects
@@ -83,7 +89,11 @@ class BladeProcessor:
         # - _extract_from_html() to avoid parsing PHP as HTML
         self.php_ranges = PHPAnalyzer.extract_php_ranges(self.content, detect_blade=True)
 
-        # Step 2: Remove comments for cleaner HTML parsing
+        # Step 2: Extract Blade directive argument ranges
+        # These will be treated as PHP code for array key exclusion
+        self._extract_blade_directive_ranges()
+
+        # Step 3: Remove comments for cleaner HTML parsing
         cleaned_content = self._remove_comments(self.content)
 
         # Step 3: Identify excluded ranges (translation functions, variables, etc.)
@@ -201,6 +211,32 @@ class BladeProcessor:
 
         return content
 
+    def _extract_blade_directive_ranges(self) -> None:
+        """
+        Extract Blade directive argument ranges and add them to php_ranges.
+
+        Identifies all Blade directives with arguments (e.g., @include(, @class(, @push()
+        and adds their argument ranges to php_ranges for PHP code processing.
+        """
+        # Match all directives with parentheses: @directiveName(
+        for match in re.finditer(self.BLADE_DIRECTIVE_WITH_ARGS_PATTERN, self.content):
+            # match.end() - 1 is the position of '(' in @directive(
+            # We need to find the matching closing ')'
+            paren_pos = match.end() - 1  # Position of '('
+
+            # Verify this is actually a '('
+            if paren_pos >= len(self.content) or self.content[paren_pos] != "(":
+                continue
+
+            close_paren_pos = self._find_closing_parenthesis(self.content, paren_pos)
+
+            if close_paren_pos > paren_pos:
+                # Add the argument content (inside parentheses) to php_ranges
+                # Start from after '(' and end before ')'
+                content_start = paren_pos + 1
+                content_end = close_paren_pos
+                self.php_ranges.append((content_start, content_end))
+
     def _identify_excluded_ranges(self, content: str) -> None:
         """
         Identify position ranges that should be excluded from extraction.
@@ -209,6 +245,7 @@ class BladeProcessor:
         - Translation functions ({{ __() }}, @lang(), etc.)
         - Variable expansions ({{ $var }})
         - Blade directives (@if, @endif, etc.)
+        - Blade directives with array arguments (@include, @component, etc.)
         - PHP blocks (<?php...?>, @php...@endphp)
 
         These ranges are used in process() to filter out extracted strings
@@ -236,9 +273,26 @@ class BladeProcessor:
                 if end > start:
                     self.excluded_ranges.add((start, end))
 
-        # Find Blade directives
+        # Find Blade directives with arguments (special handling)
+        # These will be parsed as PHP code to exclude array keys
+        for match in re.finditer(self.BLADE_DIRECTIVE_WITH_ARGS_PATTERN, content):
+            start = match.start()
+            # Find the closing parenthesis for the directive arguments
+            end = self._find_closing_parenthesis(content, match.end() - 1)
+            if end > start:
+                self.excluded_ranges.add((start, end + 1))  # +1 to include closing )
+
+        # Find other Blade directives (without arguments)
         for match in re.finditer(self.BLADE_DIRECTIVE_PATTERN, content):
-            self.excluded_ranges.add((match.start(), match.end()))
+            # Skip if already covered by directives with arrays
+            already_excluded = False
+            for start, end in self.excluded_ranges:
+                if start <= match.start() < end:
+                    already_excluded = True
+                    break
+
+            if not already_excluded:
+                self.excluded_ranges.add((match.start(), match.end()))
 
         # Add PHP blocks from pre-calculated ranges
         for start, end in self.php_ranges:
@@ -272,6 +326,63 @@ class BladeProcessor:
             i += 1
 
         return i
+
+    def _find_closing_parenthesis(self, content: str, start: int) -> int:
+        """
+        Find closing parenthesis for a function call or directive.
+
+        Handles nested parentheses and string literals within the arguments.
+
+        Args:
+            content: Content to search in
+            start: Starting position (should be at or just before opening '(')
+
+        Returns:
+            Position of closing ')', or -1 if not found
+        """
+        # Find opening parenthesis
+        i = start
+        while i < len(content) and content[i] != "(":
+            i += 1
+
+        if i >= len(content):
+            return -1
+
+        # Skip the opening parenthesis
+        i += 1
+        depth = 1
+
+        while i < len(content) and depth > 0:
+            char = content[i]
+
+            # Handle string literals (skip their contents)
+            if char in ('"', "'"):
+                quote = char
+                i += 1
+                # Skip through string, handling escapes
+                while i < len(content):
+                    if content[i] == "\\" and i + 1 < len(content):
+                        i += 2  # Skip escaped character
+                        continue
+                    elif content[i] == quote:
+                        i += 1
+                        break
+                    else:
+                        i += 1
+                continue
+
+            # Track nesting depth
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+
+            i += 1
+
+        if depth == 0:
+            return i - 1  # Return position of closing ')'
+        else:
+            return -1  # Unmatched parenthesis
 
     def _is_in_excluded_range(self, pos: int) -> bool:
         """Check if a position is within an excluded range."""
