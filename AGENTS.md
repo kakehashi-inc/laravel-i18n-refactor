@@ -29,7 +29,6 @@
 
 - ❌ **DO NOT** add, remove, or modify entries in `dict/embed-exclude-dict.txt`
 - ✅ **ONLY** suggest changes to the developer for review
-- ✅ User customizations go in project root `exclude-dict.txt`
 
 ### 📝 Exclusion Dictionary Syntax
 

@@ -1,9 +1,5 @@
 # Laravel i18n Refactor - Sample Exclusion Dictionary
 #
-# This file provides examples of patterns you can use to exclude strings
-# from extraction. Copy this file to your project root as "exclude-dict.txt"
-# and customize it for your needs.
-#
 # Syntax:
 #   word        - Exact match (case-sensitive)
 #   *pattern    - Wildcard at start
@@ -21,46 +17,9 @@
 #   regex:^\d+\.\d+\.\d+$   - Version numbers (1.2.3)
 
 # ==========================================
-# Common HTML Attributes
-# ==========================================
-# These are often used as array keys in Blade templates
-
-class
-style
-id
-href
-src
-alt
-width
-height
-type
-rel
-target
-
-# ==========================================
-# Form Field Attributes
-# ==========================================
-
-name
-value
-placeholder
-autocomplete
-autofocus
-readonly
-disabled
-required
-maxlength
-minlength
-pattern
-step
-min
-max
-rows
-cols
-
-# ==========================================
 # Data Attributes (Wildcard Example)
 # ==========================================
+
 # Exclude all data-* attributes
 data-*
 
@@ -73,6 +32,7 @@ data-*
 # ==========================================
 # Autocomplete Values
 # ==========================================
+
 autocomplete*
 *-password
 *-email
@@ -80,6 +40,7 @@ autocomplete*
 # ==========================================
 # HTTP Methods and Form Actions
 # ==========================================
+
 get
 post
 put
@@ -92,7 +53,6 @@ reset
 # ==========================================
 # Common Programming Terms
 # ==========================================
-# These are often used in code but not user-facing
 
 array
 object
@@ -105,20 +65,8 @@ false
 default
 
 # ==========================================
-# Laravel/PHP Keywords
+# Common Field Names
 # ==========================================
-
-csrf
-method
-token
-route
-url
-path
-
-# ==========================================
-# Common Field Names (adjust as needed)
-# ==========================================
-# These are often array keys in forms
 
 label
 email
@@ -140,7 +88,6 @@ middle_name
 # ==========================================
 # Alignment and Positioning
 # ==========================================
-# Common CSS/Bootstrap classes
 
 left
 right
@@ -150,24 +97,18 @@ bottom
 middle
 
 # ==========================================
-# Colors (if used as values, not labels)
+# Colors
 # ==========================================
-# Uncomment if you want to exclude these
 
-# red
-# blue
-# green
-# yellow
-# black
-# white
-# primary
-# secondary
-# success
-# danger
-# warning
-# info
-
-# ==========================================
-# Custom Patterns for Your Project
-# ==========================================
-# Add your project-specific exclusions below
+red
+blue
+green
+yellow
+black
+white
+primary
+secondary
+success
+danger
+warning
+info

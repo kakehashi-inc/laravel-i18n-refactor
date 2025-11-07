@@ -35,7 +35,6 @@ CLI tool extracting hardcoded strings from Laravel projects (Blade templates and
 - ❌ **DO NOT** remove entries from `dict/embed-exclude-dict.txt`
 - ❌ **DO NOT** modify entries in `dict/embed-exclude-dict.txt`
 - ✅ **ONLY** suggest changes to the developer for review
-- ✅ User customizations should go in `exclude-dict.txt` (project root)
 
 **Reason:** The embedded dictionary is shared across all users and must remain stable. Incorrect modifications can affect all projects using this tool.
 
