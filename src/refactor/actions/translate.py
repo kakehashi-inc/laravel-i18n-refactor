@@ -83,6 +83,15 @@ def setup_translate_parser(subparsers) -> None:
     ollama_parser.add_argument("--repeat-penalty", type=float, help="Repetition penalty (or OLLAMA_REPEAT_PENALTY env var)")
     ollama_parser.set_defaults(func=translate_files)
 
+    # Anthropic-compatible provider
+    anthropic_compat_parser = provider_subparsers.add_parser("anthropic-compat", parents=[translate_common], help="Use Anthropic-compatible endpoints")
+    anthropic_compat_parser.add_argument("--model", required=True, help="Model name (required)")
+    anthropic_compat_parser.add_argument("--api-base", required=True, help="API base URL (required, or ANTHROPIC_COMPAT_API_BASE env var)")
+    anthropic_compat_parser.add_argument("--api-key", help="API key (or ANTHROPIC_COMPAT_API_KEY env var)")
+    anthropic_compat_parser.add_argument("--temperature", type=float, help="Sampling temperature (or ANTHROPIC_COMPAT_TEMPERATURE env var)")
+    anthropic_compat_parser.add_argument("--max-tokens", type=int, help="Maximum tokens (or ANTHROPIC_COMPAT_MAX_TOKENS env var, default: 4096)")
+    anthropic_compat_parser.set_defaults(func=translate_files)
+
 
 def parse_language_spec(lang_spec: str) -> Tuple[str, str]:
     """

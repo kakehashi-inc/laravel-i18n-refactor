@@ -63,6 +63,16 @@ def get_provider(provider_name: str, **kwargs) -> TranslationProvider:
         except ImportError as e:
             raise ImportError(f"Ollama provider requires 'ollama' library. " f"Install with: pip install 'laravel-i18n-refactor[translate-ollama]'") from e
 
+    elif provider_name == "anthropic-compat":
+        try:
+            from .anthropic_compat_provider import AnthropicCompatProvider
+
+            return AnthropicCompatProvider(**kwargs)
+        except ImportError as e:
+            raise ImportError(
+                "Anthropic-compatible provider requires 'anthropic' library. Install with: pip install 'laravel-i18n-refactor[translate-claude]'"
+            ) from e
+
     else:
         raise ValueError(f"Unknown provider: {provider_name}")
 

@@ -132,6 +132,7 @@ laravel-i18n-refactor translate <provider> --model <model-name> -i <input-file> 
 | Claude | `claude` |  |
 | Gemini | `gemini` |  |
 | OpenAI-Compatible | `openai-compat` | OpenAI-compatible endpoints (LM Studio, LocalAI, etc.) |
+| Anthropic-Compatible | `anthropic-compat` | Anthropic-compatible endpoints (MiniMax M2, etc.) |
 | Ollama | `ollama` |  |
 
 #### Common Options (All Providers)
@@ -189,6 +190,16 @@ laravel-i18n-refactor translate <provider> --model <model-name> -i <input-file> 
 Reference value:
 
 api-base: <http://localhost:1234/v1>
+
+#### Anthropic-Compatible
+
+| Option | Environment Variable | Description |
+|--------|---------------------|-------------|
+| `--model` | `ANTHROPIC_COMPAT_MODEL` | Model name (required) |
+| `--api-base` | `ANTHROPIC_COMPAT_API_BASE` | API base URL (required) |
+| `--api-key` | `ANTHROPIC_COMPAT_API_KEY` | API key (required) |
+| `--temperature` | `ANTHROPIC_COMPAT_TEMPERATURE` | Sampling temperature |
+| `--max-tokens` | `ANTHROPIC_COMPAT_MAX_TOKENS` | Maximum tokens (default: 4096) |
 
 #### Ollama
 

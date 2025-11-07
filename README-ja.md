@@ -132,6 +132,7 @@ laravel-i18n-refactor translate <プロバイダー> --model <モデル名> -i <
 | Claude | `claude` |  |
 | Gemini | `gemini` |  |
 | OpenAI互換 | `openai-compat` | OpenAI互換エンドポイント（LM Studio、LocalAIなど） |
+| Anthropic互換 | `anthropic-compat` | Anthropic互換エンドポイント（MiniMax M2など） |
 | Ollama | `ollama` |  |
 
 #### 共通オプション（全プロバイダー）
@@ -189,6 +190,16 @@ laravel-i18n-refactor translate <プロバイダー> --model <モデル名> -i <
 参考値:
 
 api-base: <http://localhost:1234/v1>
+
+##### Anthropic互換
+
+| オプション | 環境変数 | 説明 |
+|--------|---------------------|-------------|
+| `--model` | `ANTHROPIC_COMPAT_MODEL` | モデル名（必須） |
+| `--api-base` | `ANTHROPIC_COMPAT_API_BASE` | APIベースURL（必須） |
+| `--api-key` | `ANTHROPIC_COMPAT_API_KEY` | APIキー（必須） |
+| `--temperature` | `ANTHROPIC_COMPAT_TEMPERATURE` | サンプリング温度 |
+| `--max-tokens` | `ANTHROPIC_COMPAT_MAX_TOKENS` | 最大トークン数（デフォルト: 4096） |
 
 ##### Ollama
 
