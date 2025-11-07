@@ -10,44 +10,17 @@ A CLI tool to help with Laravel internationalization by extracting hardcoded str
 - 📊 Consolidates duplicate strings across multiple files
 - 📁 Outputs structured JSON for easy integration
 
-## Installation
-
-```bash
-# Using uvx (recommended - no installation required)
-uvx laravel-i18n-refactor extract .
-
-# Or install with uv
-uv pip install laravel-i18n-refactor
-
-# Or install with pip
-pip install laravel-i18n-refactor
-```
-
 ## Usage
 
-### Extract hardcoded strings
+### String Extraction (extract)
 
-```bash
-# Using uvx (no installation required)
-uvx laravel-i18n-refactor extract .
-
-# Extract from Blade templates only
-uvx laravel-i18n-refactor extract resources/views -n "**/*.blade.php" -o strings.json
-
-# Extract from specific directory
-uvx laravel-i18n-refactor extract app/Http/Controllers -n "*.php" -o output.json
-
-# If installed, you can use the command directly
-laravel-i18n-refactor extract .
-```
-
-### Command Line Options
+#### Command Line Options
 
 ```text
 laravel-i18n-refactor extract <directory> [OPTIONS]
 
 Arguments:
-  directory                 Target directory to search for files
+  directory                 Target directory to search
 
 Options:
   -n, --name PATTERN        File name pattern (default: "**/*.php")
@@ -81,57 +54,19 @@ Options:
 
   --disable-php             Disable processing of regular .php files (this is the default)
 
+  --exclude-dict FILE       Path to a text file containing strings to exclude (one per line)
+
   -h, --help                Show this help message
 
 Examples:
-  # Basic usage (Blade files only, default settings)
-  uvx laravel-i18n-refactor extract .
+  # Extract from Blade templates only
+  uvx laravel-i18n-refactor extract resources/views -n "**/*.blade.php" -o output.json
 
   # Exclude multiple directories
-  uvx laravel-i18n-refactor extract . -e node_modules -e storage -e bootstrap/cache
-
-  # Extract only from specific pattern with exclusions
-  uvx laravel-i18n-refactor extract . -n "**/*.blade.php" -e tests -e vendor
-
-  # Process both Blade and PHP files
-  uvx laravel-i18n-refactor extract . --enable-php -o output.json
-
-  # Change split threshold (split every 200 items)
-  uvx laravel-i18n-refactor extract . -o output.json --split-threshold 200
-
-  # Disable splitting (output everything in a single file)
-  uvx laravel-i18n-refactor extract . -o output.json --split-threshold 0
-
-  # Change context lines (7 lines: 3 before + target + 3 after)
-  uvx laravel-i18n-refactor extract . -o output.json --context-lines 7
-
-  # Disable context output
-  uvx laravel-i18n-refactor extract . -o output.json --context-lines 0
-
-  # Change minimum byte length (exclude strings with less than 3 bytes)
-  uvx laravel-i18n-refactor extract . -o output.json --min-bytes 3
-
-  # Include hidden directories in search
-  uvx laravel-i18n-refactor extract . --include-hidden
+  uvx laravel-i18n-refactor extract ~/sources/test-project -e Archive -e temp -o output.json
 ```
 
-### Automatic Exclusions
-
-The tool automatically detects Laravel projects (by finding `composer.json`) and excludes:
-
-**User-specified exclusions:**
-- Directories specified with `-e`/`--exclude` (default: `node_modules`)
-
-**Laravel project auto-exclusions:**
-- `vendor` - Composer dependencies
-- `node_modules` - NPM dependencies
-- `public` - Public assets (compiled/generated files)
-- `storage` - Storage directory (logs, cache, sessions)
-- `bootstrap/cache` - Bootstrap cache files
-
-These auto-exclusions ensure that dependencies and generated files are not processed, keeping the focus on your source code.
-
-## Output Format
+#### Output Format
 
 The tool generates a JSON file with the following structure:
 
@@ -160,129 +95,11 @@ The tool generates a JSON file with the following structure:
 ]
 ```
 
-### Automatic File Splitting
-
-When extracting a large number of strings, the output is automatically split into multiple files:
-
-- **Default**: Split every 100 items
-- **Split Example**: `output.json` → `output-01.json`, `output-02.json`, `output-03.json`, ...
-- **Customization**: Use `--split-threshold` option to change the threshold
-- **Disable Splitting**: Use `--split-threshold 0` to output everything in a single file
-
-```bash
-# Default (split every 100 items)
-uvx laravel-i18n-refactor extract . -o output.json
-
-# Custom threshold (split every 200 items)
-uvx laravel-i18n-refactor extract . -o output.json --split-threshold 200
-
-# Disable splitting (single file)
-uvx laravel-i18n-refactor extract . -o output.json --split-threshold 0
-```
-
-**Note**: When outputting to stdout (without `-o` option), no splitting occurs.
-
-### Field Descriptions
-
-- `text`: The extracted string content (preserves newlines, tabs, spaces, and escape sequences)
-- `occurrences`: Array of locations where the string appears
-- `file`: File path (relative to the search directory)
-- `positions`: Array of positions within the same file
-- `line`: Line number (1-based)
-- `column`: Column number (0-based)
-- `length`: String length (character count)
-- `context`: Context lines (target line and 2 lines before/after, total 5 lines, may be less at file boundaries)
-- `column`: Column number (0-based)
-- `length`: String length (character count)
-
-## What Gets Extracted
-
-### Blade Files (.blade.php)
-
-**✅ Extracted:**
-- Text nodes between HTML tags
-- HTML attribute values
-- JavaScript string literals in `<script>` tags
-
-**❌ Excluded:**
-- Already translated strings (`{{ __() }}`, `@lang()`, etc.)
-- PHP variables (`{{ $variable }}`)
-- Blade directives (`@if`, `@foreach`, etc.)
-- Comments (HTML and Blade)
-- Empty or whitespace-only strings
-
-### PHP Files (.php)
-
-**✅ Extracted:**
-- Validation messages
-- Exception messages
-- Response messages
-- User-facing error and success messages
-
-**❌ Excluded:**
-- Already translated strings (`__()`, `trans()`, etc.)
-- Log messages (`Log::info()`, `logger()`, etc.)
-- Console output (`echo`, `print`, `var_dump()`, etc.)
-- Command output (`$this->info()`, `$this->error()`, etc.)
-- Array keys
-- Comments
-- Empty or whitespace-only strings
-
-### Examples
-
-**Blade extraction:**
-```html
-<!-- Extracted: "Welcome to Laravel" -->
-<h1>Welcome to Laravel</h1>
-
-<!-- Extracted: "Enter your name" -->
-<input placeholder="Enter your name">
-
-<!-- Excluded: already translated -->
-<p>{{ __('messages.welcome') }}</p>
-
-<!-- Excluded: variable -->
-<p>{{ $userName }}</p>
-```
-
-## Exclusion Dictionary
+#### Exclusion Dictionary
 
 You can exclude specific strings from extraction using an exclusion dictionary file.
 
-### Basic Usage
-
-Create an `exclude-dict.txt` file in your project root, and it will be automatically loaded:
-
-```bash
-# Create exclusion dictionary in project root
-cat > exclude-dict.txt << 'EOF'
-# Comments: lines starting with # are ignored
-
-# Exact matches (case-sensitive)
-label
-class
-style
-name
-
-# Wildcard patterns
-data-*
-autocomplete*
-*-icon
-
-# Negation patterns (starting with !)
-# Re-include strings that were excluded by previous patterns
-!class-name
-!data-important
-
-# Array key patterns
-'*' =>*
-EOF
-
-# Run extraction with exclusion dictionary
-uvx laravel-i18n-refactor extract .
-```
-
-### Syntax
+##### Syntax
 
 The exclusion dictionary supports both glob patterns and regular expressions:
 
@@ -295,103 +112,106 @@ The exclusion dictionary supports both glob patterns and regular expressions:
 | `!pattern` | Negation (include despite previous exclusion) | `!data-important` includes "data-important" |
 | `# comment` | Comment line (ignored) | `# This is a comment` |
 
-### Regular Expression Patterns
-
-For more precise pattern matching, use the `regex:` prefix:
-
-```text
-# Exclude dimension patterns (e.g., 600x600, 1920x1080)
-regex:^\d+x\d+$
-
-# Exclude 3-4 digit numbers only
-regex:^\d{3,4}$
-
-# Exclude uppercase 2-3 letter codes
-regex:^[A-Z]{2,3}$
-
-# Exclude hex color codes
-regex:^#[0-9a-fA-F]{3,6}$
-
-# Exclude version numbers
-regex:^\d+\.\d+\.\d+$
-```
-
 **Note**: Regular expressions are evaluated as Python regex patterns. Invalid regex patterns are silently ignored.
 
-### Pattern Examples
+### AI Translation (translate)
 
-**Glob patterns:**
+This tool supports translating extracted strings using various AI providers.
 
-```text
-# Exclude HTML attributes
-class
-style
-id
+#### Translation Command
 
-# Exclude data-* attributes (but keep specific ones)
-data-*
-!data-label
-!data-message
-
-# Form-related attributes
-name
-type
-value
-placeholder
-
-# But keep user-facing placeholders
-!placeholder-text
-
-# Configuration keys
-*_config
-*.env
+```bash
+laravel-i18n-refactor translate <provider> --model <model-name> -i <input-file> [OPTIONS]
 ```
 
-**Regular expression patterns:**
+#### Available Providers
 
-```text
-# Exclude dimension patterns (600x600, 1920x1080)
-regex:^\d+x\d+$
+| Provider | Command | Description |
+|----------|---------|-------------|
+| OpenAI | `openai` |  |
+| Claude | `claude` |  |
+| Gemini | `gemini` |  |
+| OpenAI-Compatible | `openai-compat` | OpenAI-compatible endpoints (LM Studio, LocalAI, etc.) |
+| Ollama | `ollama` |  |
 
-# Exclude hex color codes
-regex:^#[0-9a-fA-F]{3,6}$
+#### Common Options (All Providers)
 
-# Exclude version numbers
-regex:^\d+\.\d+\.\d+$
-```
+| Option | Description |
+|--------|-------------|
+| `-i, --input FILE` | Input JSON file(s) to translate (can be specified multiple times) |
+| `--lang CODE:DESCRIPTION` | Target language (e.g., "ja:Japanese", "en:American English") |
+| `--list-models` | List available models for the provider |
+| `--dry-run` | Preview translation without making API calls |
 
-### Embedded Exclusion Dictionary
+#### Provider-Specific Options
 
-The tool includes an embedded dictionary that excludes common 2-letter language codes (ISO 639-1). This is automatically merged with your custom dictionary.
+#### OpenAI
 
-**Note**: Custom dictionary patterns are evaluated after the embedded dictionary, so negation patterns (`!`) can override embedded exclusions.
+| Option | Environment Variable | Description |
+|--------|---------------------|-------------|
+| `--model` | `OPENAI_MODEL` | Model name (required) |
+| `--api-key` | `OPENAI_API_KEY` | OpenAI API key |
+| `--organization` | `OPENAI_ORGANIZATION` | Organization ID |
+| `--temperature` | `OPENAI_TEMPERATURE` | Sampling temperature |
+| `--max-tokens` | `OPENAI_MAX_TOKENS` | Maximum tokens |
+| `--batch-size` | `OPENAI_BATCH_SIZE` | Batch size (default: 10) |
 
-```text
-# "en" is excluded by embedded dictionary, but you can include it
-!en
-```
+#### Claude (Anthropic)
 
+| Option | Environment Variable | Description |
+|--------|---------------------|-------------|
+| `--model` | `ANTHROPIC_MODEL` | Model name (required) |
+| `--api-key` | `ANTHROPIC_API_KEY` | Anthropic API key |
+| `--temperature` | `ANTHROPIC_TEMPERATURE` | Sampling temperature |
+| `--max-tokens` | `ANTHROPIC_MAX_TOKENS` | Maximum tokens (default: 4096) |
 
-'required' => 'This field is required',
+#### Google Gemini
 
-// Extracted: "User not found"
-throw new Exception('User not found');
+| Option | Environment Variable | Description |
+|--------|---------------------|-------------|
+| `--model` | `GEMINI_MODEL` | Model name (required) |
+| `--api-key` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Google API key |
+| `--temperature` | `GEMINI_TEMPERATURE` | Sampling temperature |
+| `--max-tokens` | `GEMINI_MAX_TOKENS` | Maximum output tokens |
+| `--top-p` | `GEMINI_TOP_P` | Nucleus sampling |
+| `--top-k` | `GEMINI_TOP_K` | Top-k sampling |
 
-// Excluded: already translated
-__('messages.welcome')
+#### OpenAI-Compatible
 
-// Excluded: log message
-Log::info('Processing started');
+| Option | Environment Variable | Description |
+|--------|---------------------|-------------|
+| `--model` | `OPENAI_COMPAT_MODEL` | Model name (required) |
+| `--api-base` | `OPENAI_COMPAT_API_BASE` | API base URL (required) |
+| `--api-key` | `OPENAI_COMPAT_API_KEY` | API key (if required) |
+| `--temperature` | `OPENAI_COMPAT_TEMPERATURE` | Sampling temperature |
+| `--max-tokens` | `OPENAI_COMPAT_MAX_TOKENS` | Maximum tokens |
 
-// Excluded: array key, but "John" is extracted
-'name' => 'John',
-```
+Reference value:
+
+api-base: <http://localhost:1234/v1>
+
+#### Ollama
+
+| Option | Environment Variable | Description |
+|--------|---------------------|-------------|
+| `--model` | `OLLAMA_MODEL` | Model name (required) |
+| `--api-base` | `OLLAMA_HOST` | Ollama server URL (default: http://localhost:11434) |
+| `--temperature` | `OLLAMA_TEMPERATURE` | Sampling temperature |
+| `--max-tokens` | `OLLAMA_MAX_TOKENS` | Maximum tokens |
+| `--num-ctx` | `OLLAMA_NUM_CTX` | Context window size |
+| `--top-p` | `OLLAMA_TOP_P` | Nucleus sampling |
+| `--top-k` | `OLLAMA_TOP_K` | Top-k sampling |
+| `--repeat-penalty` | `OLLAMA_REPEAT_PENALTY` | Repetition penalty |
 
 ## Development
 
-Create and activate a virtual environment:
+### Development Environment Setup
 
 ```bash
+# Clone the repository
+git clone https://github.com/kakehashi-inc/laravel-i18n-refactor.git
+cd laravel-i18n-refactor
+
 python -m venv venv
 
 # Activate virtual environment
@@ -403,12 +223,6 @@ source venv/bin/activate
 # Install in development mode
 pip install -e ".[dev]"
 ```
-
-## Requirements
-
-- Python 3.7 or higher
-- beautifulsoup4 >= 4.12.0
-- lxml >= 4.9.0
 
 ## License
 
