@@ -1,6 +1,5 @@
 """Ollama provider for local model translations."""
 
-import json
 import sys
 from typing import List, Dict, Tuple
 import ollama
@@ -77,13 +76,11 @@ class OllamaProvider(TranslationProvider):
         prompt = self.build_prompt(items, languages)
 
         try:
-            response = self.client.generate(model=self.model, prompt=prompt, options=self.options if self.options else None, format="json")  # Force JSON output
+            response = self.client.generate(model=self.model, prompt=prompt, options=self.options if self.options else None)
 
-            result = json.loads(response["response"])
-            return result.get("items", [])
-        except json.JSONDecodeError as e:
-            print(f"Error parsing response JSON: {e}", file=sys.stderr)
-            return []
+            content = response["response"]
+            # Parse XML response
+            return self.parse_xml_responses(content, items, languages)
         except Exception as e:
             print(f"Error calling Ollama API: {e}", file=sys.stderr)
             return []

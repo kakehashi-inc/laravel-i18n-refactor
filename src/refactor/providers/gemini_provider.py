@@ -1,6 +1,5 @@
 """Google Gemini provider for translations."""
 
-import json
 import sys
 from typing import List, Dict, Tuple
 import google.generativeai as genai
@@ -84,18 +83,10 @@ class GeminiProvider(TranslationProvider):
 
             response = model.generate_content(prompt)
 
-            # Extract JSON from response
-            text = response.text.strip()
-            # Remove markdown code blocks if present
-            if text.startswith("```"):
-                lines = text.split("\n")
-                text = "\n".join(lines[1:-1])
-
-            result = json.loads(text)
-            return result.get("items", [])
-        except json.JSONDecodeError as e:
-            print(f"Error parsing response JSON: {e}", file=sys.stderr)
-            return []
+            # Extract response text
+            content = response.text.strip()
+            # Parse XML response
+            return self.parse_xml_responses(content, items, languages)
         except (ValueError, RuntimeError, ConnectionError) as e:
             print(f"Error calling Gemini API: {e}", file=sys.stderr)
             return []

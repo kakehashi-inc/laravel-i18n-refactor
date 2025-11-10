@@ -1,6 +1,5 @@
 """OpenAI provider for translations."""
 
-import json
 import sys
 from typing import List, Dict, Tuple
 import openai
@@ -61,11 +60,11 @@ class OpenAIProvider(TranslationProvider):
 
         # Build request parameters
         messages = [
-            {"role": "system", "content": "You are a translation assistant for Laravel i18n. Return valid JSON only."},
+            {"role": "system", "content": "You are a translation assistant for Laravel i18n."},
             {"role": "user", "content": prompt},
         ]
 
-        params = {"model": self.model, "messages": messages, "response_format": {"type": "json_object"}}
+        params = {"model": self.model, "messages": messages}
 
         # Add optional parameters if provided
         if self.temperature is not None:
@@ -75,11 +74,9 @@ class OpenAIProvider(TranslationProvider):
 
         try:
             response = self.client.chat.completions.create(**params)
-            result = json.loads(response.choices[0].message.content)
-            return result.get("items", [])
-        except json.JSONDecodeError as e:
-            print(f"Error parsing response JSON: {e}", file=sys.stderr)
-            return []
+            content = response.choices[0].message.content
+            # Parse XML response
+            return self.parse_xml_responses(content, items, languages)
         except Exception as e:
             print(f"Error calling OpenAI API: {e}", file=sys.stderr)
             return []

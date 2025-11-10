@@ -1,6 +1,5 @@
 """Anthropic Claude provider for translations."""
 
-import json
 import sys
 from typing import List, Dict, Tuple
 import anthropic
@@ -61,11 +60,8 @@ class ClaudeProvider(TranslationProvider):
             response = self.client.messages.create(**params)
             # Claude returns text content
             content = response.content[0].text
-            result = json.loads(content)
-            return result.get("items", [])
-        except json.JSONDecodeError as e:
-            print(f"Error parsing response JSON: {e}", file=sys.stderr)
-            return []
+            # Parse XML response
+            return self.parse_xml_responses(content, items, languages)
         except Exception as e:
             print(f"Error calling Claude API: {e}", file=sys.stderr)
             return []

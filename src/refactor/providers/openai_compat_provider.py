@@ -1,6 +1,5 @@
 """OpenAI-compatible provider for translations."""
 
-import json
 import sys
 from typing import List, Dict, Tuple
 import openai
@@ -60,7 +59,7 @@ class OpenAICompatProvider(TranslationProvider):
 
         # Build request parameters
         messages = [
-            {"role": "system", "content": "You are a translation assistant for Laravel i18n. Return valid JSON only."},
+            {"role": "system", "content": "You are a translation assistant for Laravel i18n."},
             {"role": "user", "content": prompt},
         ]
 
@@ -72,20 +71,11 @@ class OpenAICompatProvider(TranslationProvider):
         if self.max_tokens is not None:
             params["max_tokens"] = self.max_tokens
 
-        # Try to use JSON mode if supported
-        try:
-            params["response_format"] = {"type": "json_object"}
-        except Exception:
-            # Some endpoints may not support JSON mode
-            pass
-
         try:
             response = self.client.chat.completions.create(**params)
-            result = json.loads(response.choices[0].message.content)
-            return result.get("items", [])
-        except json.JSONDecodeError as e:
-            print(f"Error parsing response JSON: {e}", file=sys.stderr)
-            return []
+            content = response.choices[0].message.content
+            # Parse XML response
+            return self.parse_xml_responses(content, items, languages)
         except Exception as e:
             print(f"Error calling OpenAI-compatible API: {e}", file=sys.stderr)
             return []

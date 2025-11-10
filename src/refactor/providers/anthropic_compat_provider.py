@@ -1,6 +1,5 @@
 """Anthropic-compatible provider for translations (e.g., MiniMax M2)."""
 
-import json
 import sys
 from typing import List, Dict, Tuple
 import anthropic
@@ -69,11 +68,8 @@ class AnthropicCompatProvider(TranslationProvider):
             response = self.client.messages.create(**params)
             # Anthropic API returns text content
             content = response.content[0].text
-            result = json.loads(content)
-            return result.get("items", [])
-        except json.JSONDecodeError as e:
-            print(f"Error parsing response JSON: {e}", file=sys.stderr)
-            return []
+            # Parse XML response
+            return self.parse_xml_responses(content, items, languages)
         except Exception as e:
             print(f"Error calling Anthropic-compatible API: {e}", file=sys.stderr)
             return []

@@ -95,6 +95,12 @@ def setup_translate_parser(subparsers) -> None:
         "--lang", action="append", metavar="CODE:DESCRIPTION", help='Target language in format "code:description" (e.g., "ja:Japanese", "en:American English")'
     )
     translate_common.add_argument("--batch-size", type=int, default=5, help="Number of items to translate in one API call (default: 5)")
+    translate_common.add_argument(
+        "--summary",
+        type=str,
+        help='Application summary for context-aware translation (e.g., "E-commerce site for selling books" or "Hospital management system"). '
+        "Helps AI choose appropriate terminology and distinguish technical terms from user-facing text. Optional but recommended for better accuracy.",
+    )
     translate_common.add_argument("--list-models", action="store_true", help="List available models for this provider and exit")
     translate_common.add_argument("--dry-run", action="store_true", help="Show what would be translated without making API calls")
 
@@ -285,7 +291,19 @@ def translate_files(args) -> int:
         }
 
         # Add optional parameters if present
-        optional_params = ["api_key", "api_base", "organization", "temperature", "max_tokens", "batch_size", "top_p", "top_k", "num_ctx", "repeat_penalty"]
+        optional_params = [
+            "api_key",
+            "api_base",
+            "organization",
+            "temperature",
+            "max_tokens",
+            "batch_size",
+            "top_p",
+            "top_k",
+            "num_ctx",
+            "repeat_penalty",
+            "summary",
+        ]
 
         for param in optional_params:
             if hasattr(args, param):
