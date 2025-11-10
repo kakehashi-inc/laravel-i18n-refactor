@@ -80,6 +80,13 @@ class StringProcessor:
         if re.match(escape_only_pattern, check_text):
             return False
 
+        # Exclude URL patterns
+        # URLs should never be translated as they are technical references
+        # Supported schemes: http, https, ftp, ftps, file, mailto, tel, sms, data, javascript, ws, wss
+        url_pattern = r"^(https?|ftps?|file|mailto|tel|sms|data|javascript|ws|wss):"
+        if re.match(url_pattern, check_text, re.IGNORECASE):
+            return False
+
         # Check if string contains non-ASCII characters
         has_non_ascii = StringProcessor.contains_non_ascii(check_text)
 
