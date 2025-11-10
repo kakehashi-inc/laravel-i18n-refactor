@@ -8,3 +8,11 @@ Instagram
 SNS
 TEL
 Youtube
+regex:Exception\s*\(
+Error
+Forbidden
+GET
+MY PAGE
+Bearer
+Content-Type
+Desktop.ini
