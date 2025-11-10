@@ -97,7 +97,7 @@ class TranslationProvider(ABC):
         Returns:
             List of model names
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def translate_batch(self, items: List[Dict], languages: List[Tuple[str, str]]) -> List[Dict]:
@@ -128,7 +128,7 @@ class TranslationProvider(ABC):
                     "translations": false
                 }
         """
-        pass
+        raise NotImplementedError
 
     def build_prompt(self, items: List[Dict], languages: List[Tuple[str, str]]) -> str:
         """

@@ -3,10 +3,78 @@ Translation action for translating extracted strings using AI providers.
 """
 
 import sys
+import os
 import json
 import argparse
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
+
+
+def get_terminal_width() -> int:
+    """
+    Get terminal width.
+
+    Returns:
+        Terminal width (default: 80 if cannot determine)
+    """
+    try:
+        return os.get_terminal_size().columns
+    except (AttributeError, OSError):
+        return 80
+
+
+def truncate_text(text: str, max_width: int) -> str:
+    """
+    Truncate text to fit within max_width, showing beginning and end with '...' in middle.
+
+    Args:
+        text: Text to truncate
+        max_width: Maximum width
+
+    Returns:
+        Truncated text
+    """
+    if len(text) <= max_width:
+        return text
+
+    if max_width < 10:
+        return text[:max_width]
+
+    # Show beginning and end with '...' in middle
+    ellipsis = "..."
+    side_length = (max_width - len(ellipsis)) // 2
+    return text[:side_length] + ellipsis + text[-side_length:]
+
+
+def print_progress(current: int, total: int, text: str, overwrite: bool = True) -> None:
+    """
+    Print translation progress with text truncation.
+
+    Args:
+        current: Current item number (1-based)
+        total: Total number of items
+        text: Text being translated
+        overwrite: If True, overwrite previous line
+    """
+    terminal_width = get_terminal_width()
+    max_text_width = terminal_width - 2  # Leave 2 chars margin
+
+    # Build progress message
+    progress_prefix = f"[{current}/{total}] Translating: "
+    available_width = max_text_width - len(progress_prefix)
+
+    if available_width > 0:
+        truncated_text = truncate_text(text, available_width)
+        message = progress_prefix + truncated_text
+    else:
+        message = f"[{current}/{total}]"
+
+    # Print with or without overwrite
+    if overwrite:
+        # Clear line and print
+        print(f"\r{message:<{max_text_width}}", end="", flush=True, file=sys.stderr)
+    else:
+        print(message, file=sys.stderr)
 
 
 def setup_translate_parser(subparsers) -> None:
@@ -26,6 +94,7 @@ def setup_translate_parser(subparsers) -> None:
     translate_common.add_argument(
         "--lang", action="append", metavar="CODE:DESCRIPTION", help='Target language in format "code:description" (e.g., "ja:Japanese", "en:American English")'
     )
+    translate_common.add_argument("--batch-size", type=int, default=5, help="Number of items to translate in one API call (default: 5)")
     translate_common.add_argument("--list-models", action="store_true", help="List available models for this provider and exit")
     translate_common.add_argument("--dry-run", action="store_true", help="Show what would be translated without making API calls")
 
@@ -41,7 +110,6 @@ def setup_translate_parser(subparsers) -> None:
     openai_parser.add_argument("--organization", help="Organization ID (or OPENAI_ORGANIZATION env var)")
     openai_parser.add_argument("--temperature", type=float, help="Sampling temperature (or OPENAI_TEMPERATURE env var)")
     openai_parser.add_argument("--max-tokens", type=int, help="Maximum tokens (or OPENAI_MAX_TOKENS env var)")
-    openai_parser.add_argument("--batch-size", type=int, help="Batch size (or OPENAI_BATCH_SIZE env var, default: 10)")
     openai_parser.set_defaults(func=translate_files)
 
     # Claude provider
@@ -98,36 +166,25 @@ def parse_language_spec(lang_spec: str) -> Tuple[str, str]:
     Parse language specification string.
 
     Args:
-        lang_spec: Language spec in format "code:description" or just "code"
+        lang_spec: Language spec in format "code:description"
 
     Returns:
         Tuple of (code, description)
-    """
-    if ":" in lang_spec:
-        parts = lang_spec.split(":", 1)
-        return (parts[0].strip(), parts[1].strip())
 
-    # Default descriptions for common language codes
-    default_descriptions = {
-        "ja": "Japanese",
-        "en": "American English",
-        "es": "Spanish",
-        "fr": "French",
-        "de": "German",
-        "zh": "Chinese",
-        "ko": "Korean",
-        "pt": "Portuguese",
-        "ru": "Russian",
-        "it": "Italian",
-        "nl": "Dutch",
-        "pl": "Polish",
-        "tr": "Turkish",
-        "vi": "Vietnamese",
-        "th": "Thai",
-        "ar": "Arabic",
-        "hi": "Hindi",
-    }
-    return (lang_spec, default_descriptions.get(lang_spec, lang_spec.upper()))
+    Raises:
+        ValueError: If lang_spec is not in "code:description" format
+    """
+    if ":" not in lang_spec:
+        raise ValueError(f'Language specification must be in format "code:description" (e.g., "ja:Japanese"), got: {lang_spec}')
+
+    parts = lang_spec.split(":", 1)
+    code = parts[0].strip()
+    description = parts[1].strip()
+
+    if not code or not description:
+        raise ValueError(f"Both code and description must be non-empty in language specification: {lang_spec}")
+
+    return (code, description)
 
 
 def validate_extraction_format(data: List[Dict]) -> Tuple[bool, Optional[str]]:
@@ -181,38 +238,6 @@ def identify_untranslated(data: List[Dict], languages: List[str]) -> List[Dict]:
                 items_to_translate.append(item)
 
     return items_to_translate
-
-
-def merge_translations(original: List[Dict], translated: List[Dict]) -> List[Dict]:
-    """
-    Merge translated content back into original data.
-
-    Args:
-        original: Original extraction data
-        translated: Translated items from AI
-
-    Returns:
-        Merged data with translations
-    """
-    # Create map of translations by text
-    translation_map = {item["text"]: item.get("translations", False) for item in translated}
-
-    # Merge into original data
-    for item in original:
-        if item["text"] in translation_map:
-            new_translations = translation_map[item["text"]]
-
-            # Handle different cases
-            if new_translations is False:
-                # Mark as non-translatable
-                item["translations"] = False
-            elif isinstance(new_translations, dict):
-                # Merge translations
-                if "translations" not in item or not isinstance(item["translations"], dict):
-                    item["translations"] = {}
-                item["translations"].update(new_translations)
-
-    return original
 
 
 def translate_files(args) -> int:
@@ -276,6 +301,8 @@ def translate_files(args) -> int:
 
     # Process each input file
     total_translated = 0
+    total_non_translatable = 0
+    total_failed = 0
 
     for input_path_str in args.input:
         input_path = Path(input_path_str)
@@ -302,46 +329,78 @@ def translate_files(args) -> int:
                 print(f"No items need translation in {input_path}")
                 continue
 
-            print(f"Translating {len(items_to_translate)} items in {input_path}...")
+            print(f"Translating {len(items_to_translate)} items in {input_path}...", file=sys.stderr)
 
             if args.dry_run:
-                print(f"[DRY RUN] Would translate {len(items_to_translate)} items")
+                print(f"[DRY RUN] Would translate {len(items_to_translate)} items in batches of {args.batch_size}")
                 for item in items_to_translate[:5]:
                     print(f"  - {item['text'][:50]}...")
                 if len(items_to_translate) > 5:
                     print(f"  ... and {len(items_to_translate) - 5} more")
                 continue
 
-            # Translate in batches
-            translated_items = []
-            batch_size = getattr(args, "batch_size", 10)
+            # Process items in batches
+            file_translated = 0
+            file_non_translatable = 0
+            file_failed = 0
+            batch_size = args.batch_size
 
-            for i in range(0, len(items_to_translate), batch_size):
-                batch = items_to_translate[i : i + batch_size]
-                batch_num = i // batch_size + 1
+            for batch_start in range(0, len(items_to_translate), batch_size):
+                batch_end = min(batch_start + batch_size, len(items_to_translate))
+                batch = items_to_translate[batch_start:batch_end]
+                batch_num = (batch_start // batch_size) + 1
                 total_batches = (len(items_to_translate) + batch_size - 1) // batch_size
 
-                print(f"  Processing batch {batch_num}/{total_batches}...", file=sys.stderr)
+                # Display progress for first item in batch
+                first_item_text = batch[0]["text"]
+                print_progress(batch_end, len(items_to_translate), first_item_text)
 
                 try:
-                    result = provider.translate_batch(batch, languages)
-                    translated_items.extend(result)
-                except Exception as e:
-                    print(f"  Warning: Batch translation failed: {e}", file=sys.stderr)
-                    # Continue processing other batches
+                    # Translate batch
+                    results = provider.translate_batch(batch, languages)
 
-            # Merge translations
-            merged_data = merge_translations(data, translated_items)
+                    # Update items in data directly
+                    for result in results:
+                        result_text = result.get("text")
+                        if not result_text:
+                            continue
+
+                        # Find the item in original data by text
+                        for original_item in data:
+                            if original_item.get("text") == result_text:
+                                translations = result.get("translations")
+                                if translations is False:
+                                    original_item["translations"] = False
+                                    file_non_translatable += 1
+                                elif isinstance(translations, dict):
+                                    # Merge translations
+                                    if "translations" not in original_item or not isinstance(original_item["translations"], dict):
+                                        original_item["translations"] = {}
+                                    original_item["translations"].update(translations)
+                                    file_translated += 1
+                                break
+
+                except Exception as e:
+                    print(f"\n  Warning: Batch {batch_num}/{total_batches} translation failed: {e}", file=sys.stderr)
+                    file_failed += len(batch)
+                    continue
+
+            # Clear progress line
+            print("\r" + " " * (get_terminal_width() - 2) + "\r", end="", file=sys.stderr)
 
             # Generate output filename
             output_path = input_path.parent / f"{input_path.stem}-translated{input_path.suffix}"
 
             # Save result
             with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(merged_data, f, ensure_ascii=False, indent=2)
+                json.dump(data, f, ensure_ascii=False, indent=2)
 
-            print(f"Saved translations to {output_path}")
-            total_translated += len(translated_items)
+            print(f"  Saved translations to {output_path}", file=sys.stderr)
+            print(f"  Results: {file_translated} translated, {file_non_translatable} non-translatable, {file_failed} failed", file=sys.stderr)
+
+            total_translated += file_translated
+            total_non_translatable += file_non_translatable
+            total_failed += file_failed
 
         except json.JSONDecodeError as e:
             print(f"Error: Invalid JSON in {input_path}: {e}", file=sys.stderr)
@@ -353,7 +412,11 @@ def translate_files(args) -> int:
             traceback.print_exc()
             continue
 
-    if not args.dry_run and total_translated > 0:
-        print(f"\nTotal items translated: {total_translated}", file=sys.stderr)
+    if not args.dry_run and (total_translated > 0 or total_non_translatable > 0 or total_failed > 0):
+        print("\n=== Translation Summary ===", file=sys.stderr)
+        print(f"Translated: {total_translated}", file=sys.stderr)
+        print(f"Non-translatable: {total_non_translatable}", file=sys.stderr)
+        print(f"Failed: {total_failed}", file=sys.stderr)
+        print(f"Total processed: {total_translated + total_non_translatable + total_failed}", file=sys.stderr)
 
     return 0

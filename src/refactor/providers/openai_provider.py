@@ -1,6 +1,5 @@
 """OpenAI provider for translations."""
 
-import os
 import json
 import sys
 from typing import List, Dict, Tuple
@@ -21,7 +20,6 @@ class OpenAIProvider(TranslationProvider):
             organization: Organization ID (optional, or OPENAI_ORGANIZATION env var)
             temperature: Sampling temperature (optional, or OPENAI_TEMPERATURE env var)
             max_tokens: Maximum tokens (optional, or OPENAI_MAX_TOKENS env var)
-            batch_size: Batch size (optional, or OPENAI_BATCH_SIZE env var, default: 10)
             list_models: If True, skip validation for model listing
         """
         super().__init__(**kwargs)
@@ -45,7 +43,6 @@ class OpenAIProvider(TranslationProvider):
         # Generation parameters (optional)
         self.temperature = self._get_float_param("temperature", "OPENAI_TEMPERATURE", kwargs)
         self.max_tokens = self._get_int_param("max_tokens", "OPENAI_MAX_TOKENS", kwargs)
-        self.batch_size = self._get_int_param("batch_size", "OPENAI_BATCH_SIZE", kwargs, default=10)
 
     def list_models(self) -> List[str]:
         """List available GPT models."""

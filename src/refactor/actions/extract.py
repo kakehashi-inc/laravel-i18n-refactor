@@ -5,7 +5,6 @@ Extract action for extracting hardcoded strings from Laravel files.
 import sys
 import os
 import re
-import argparse
 from pathlib import Path
 from typing import Optional, List
 

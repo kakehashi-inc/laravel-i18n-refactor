@@ -470,7 +470,7 @@ class PHPAnalyzer:
         if position == -1:
             return True
 
-        if self._is_array_key(before_string, after_string, after_string_raw, content, position, len(text)):
+        if self._is_array_key(before_string, after_string, content, position, len(text)):
             return False
 
         return True
@@ -501,7 +501,7 @@ class PHPAnalyzer:
 
         return False
 
-    def _is_array_key(self, before_string: str, after_string: str, after_string_raw: str, content: str, position: int, text_length: int) -> bool:
+    def _is_array_key(self, before_string: str, after_string: str, content: str, position: int, text_length: int) -> bool:
         """
         Check if the string is an array key (should be excluded).
 
@@ -518,7 +518,6 @@ class PHPAnalyzer:
         Args:
             before_string: Context before the string on the same line
             after_string: Context after the string on the same line (already lstrip)
-            after_string_raw: Raw context after the string (not lstrip, for pattern matching)
             content: Full file content
             position: Character position in content
             text_length: Length of the text
