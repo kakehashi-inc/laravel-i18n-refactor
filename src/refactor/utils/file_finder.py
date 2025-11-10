@@ -93,47 +93,6 @@ def should_exclude_path(path: Path, exclude_dirs: List[str], auto_exclude_dirs: 
     return False
 
 
-def find_files(directory: Path, pattern: str, exclude_dirs: Optional[List[str]] = None, include_hidden: bool = False) -> List[Path]:
-    """
-    Find files matching a glob pattern in the specified directory.
-
-    Args:
-        directory: Base directory to search in
-        pattern: Glob pattern (e.g., "**/*.php", "*.blade.php")
-        exclude_dirs: List of directory names to exclude
-        include_hidden: Include hidden directories (starting with .) in search
-
-    Returns:
-        List of Path objects for matching files
-
-    Raises:
-        ValueError: If directory doesn't exist or is not a directory
-    """
-    if not directory.exists():
-        raise ValueError(f"Directory does not exist: {directory}")
-
-    if not directory.is_dir():
-        raise ValueError(f"Path is not a directory: {directory}")
-
-    # Use provided exclusions or empty list
-    if exclude_dirs is None:
-        exclude_dirs = []
-
-    # Find Laravel project directories to auto-exclude
-    auto_exclude_dirs = get_laravel_exclude_directories(directory)
-
-    # Use glob to find matching files
-    files = []
-    for file_path in directory.glob(pattern):
-        if file_path.is_file() and not should_exclude_path(file_path, exclude_dirs, auto_exclude_dirs, include_hidden):
-            files.append(file_path)
-
-    # Sort for consistent ordering
-    files.sort()
-
-    return files
-
-
 def find_files_iter(directory: Path, pattern: str, exclude_dirs: Optional[List[str]] = None, include_hidden: bool = False) -> Iterator[Path]:
     """
     Find files matching a glob pattern (iterator version).
