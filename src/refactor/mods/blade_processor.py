@@ -89,14 +89,10 @@ class BladeProcessor:
         # - _extract_from_html() to avoid parsing PHP as HTML
         self.php_ranges = PHPAnalyzer.extract_php_ranges(self.content, detect_blade=True)
 
-        # Step 2: Extract Blade directive argument ranges
-        # These will be treated as PHP code for array key exclusion
-        self._extract_blade_directive_ranges()
-
-        # Step 3: Remove comments for cleaner HTML parsing
+        # Step 2: Remove comments for cleaner HTML parsing
         cleaned_content = self._remove_comments(self.content)
 
-        # Step 3: Identify excluded ranges (translation functions, variables, etc.)
+        # Step 3: Identify excluded ranges (translation functions, variables, directives, etc.)
         self._identify_excluded_ranges(cleaned_content)
 
         # Step 4: Extract from HTML content (NO MASKING - parse original content)
@@ -210,32 +206,6 @@ class BladeProcessor:
         content = re.sub(r"<!--.*?-->", "", content, flags=re.DOTALL)
 
         return content
-
-    def _extract_blade_directive_ranges(self) -> None:
-        """
-        Extract Blade directive argument ranges and add them to php_ranges.
-
-        Identifies all Blade directives with arguments (e.g., @include(, @class(, @push()
-        and adds their argument ranges to php_ranges for PHP code processing.
-        """
-        # Match all directives with parentheses: @directiveName(
-        for match in re.finditer(self.BLADE_DIRECTIVE_WITH_ARGS_PATTERN, self.content):
-            # match.end() - 1 is the position of '(' in @directive(
-            # We need to find the matching closing ')'
-            paren_pos = match.end() - 1  # Position of '('
-
-            # Verify this is actually a '('
-            if paren_pos >= len(self.content) or self.content[paren_pos] != "(":
-                continue
-
-            close_paren_pos = self._find_closing_parenthesis(self.content, paren_pos)
-
-            if close_paren_pos > paren_pos:
-                # Add the argument content (inside parentheses) to php_ranges
-                # Start from after '(' and end before ')'
-                content_start = paren_pos + 1
-                content_end = close_paren_pos
-                self.php_ranges.append((content_start, content_end))
 
     def _identify_excluded_ranges(self, content: str) -> None:
         """

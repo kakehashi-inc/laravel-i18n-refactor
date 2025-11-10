@@ -319,3 +319,92 @@ zh_CN
 zh_HK
 zh_TW
 zu_ZA
+
+# ==============================================================================
+# PHP and Laravel Technical Keywords
+# ==============================================================================
+# These are technical values used in Laravel validation rules, type hints,
+# database column types, and configuration. They should not be translated.
+# Note: Common English words that might be used as labels (like "email", "phone")
+# are NOT included here to avoid over-exclusion.
+
+# PHP Type Keywords
+array
+object
+string
+integer
+boolean
+float
+double
+null
+callable
+iterable
+mixed
+
+# Laravel Validation Rule Keywords (Technical)
+accepted
+declined
+confirmed
+prohibited
+required_with
+required_without
+required_if
+required_unless
+nullable
+sometimes
+bail
+filled
+exists
+unique
+distinct
+regex
+alpha_dash
+alpha_num
+ascii
+before_or_equal
+after_or_equal
+date_format
+timezone
+mimetypes
+mimes
+dimensions
+between
+gt
+gte
+lt
+lte
+in_array
+json
+uuid
+ulid
+mac_address
+ip
+ipv4
+ipv6
+url
+active_url
+
+# Database Column Types (Technical)
+bigint
+tinyint
+smallint
+mediumint
+unsigned
+varchar
+char
+text
+longtext
+mediumtext
+tinytext
+blob
+longblob
+mediumblob
+tinyblob
+datetime
+timestamp
+decimal
+enum
+
+# Laravel Casting Types (Technical)
+encrypted
+hashed

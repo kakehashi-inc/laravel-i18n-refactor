@@ -26,105 +26,257 @@ class PHPAnalyzer:
     """
 
     # Exclusion patterns for PHP string validation
-    TRANSLATION_FUNCTIONS = [
-        r"__\s*\(",
-        r"trans\s*\(",
-        r"@lang\s*\(",
-        r"Lang::get\s*\(",
+    # Excluded functions and statements (translation + console output + logging)
+    # Entries can be:
+    # - Simple function names: "function_name" -> generates \bfunction_name\s*\(
+    # - Static methods: "Class::method" -> generates Class::method\s*\(
+    # - Blade directives: "@directive" -> generates @directive\s*\(
+    # - Regex patterns (with regex: prefix): "regex:pattern" -> uses pattern as-is
+    EXCLUDED_FUNCTIONS = [
+        # Translation functions (Laravel i18n)
+        "__",
+        "trans",
+        "@lang",
+        "Lang::get",
+        # Console output functions
+        "var_dump",
+        "dd",
+        "dump",
+        "print_r",
+        # Console output statements (language constructs - use regex for space-based syntax)
+        r"regex:\becho\s+",
+        r"regex:\bprint\s+",
+        # Logging functions
+        "logger",
+        "error_log",
+        # Log facade static methods (Log::*)
+        "Log::emergency",
+        "Log::alert",
+        "Log::critical",
+        "Log::error",
+        "Log::warning",
+        "Log::notice",
+        "Log::info",
+        "Log::debug",
     ]
 
-    LOG_FUNCTIONS = [
-        r"Log::\w+\s*\(",
-        r"logger\s*\(",
-        r"error_log\s*\(",
+    # Class instance methods
+    CLASS_INSTANCE_METHODS = [
+        # Artisan command output methods
+        "info",
+        "error",
+        "line",
+        "comment",
+        "warn",
+        "warning",
+        # Eloquent/Query Builder methods
+        "select",
+        "where",
+        "whereIn",
+        "whereNotIn",
+        "whereBetween",
+        "whereNull",
+        "whereNotNull",
+        "orderBy",
+        "groupBy",
+        "having",
+        "join",
+        "leftJoin",
+        "rightJoin",
+        "pluck",
+        "value",
+        "raw",
+        "table",
+        "format",
+        # Validation methods
+        "validate",
+        "validateWithBag",
     ]
 
-    CONSOLE_OUTPUT = [
-        r"\becho\s+",
-        r"\bprint\s+",
-        r"\bvar_dump\s*\(",
-        r"\bdd\s*\(",
-        r"\bdump\s*\(",
-        r"\bprint_r\s*\(",
+    # Function definitions to exclude entirely (including function body)
+    # STRICT MODE: To prevent accidental exclusions, these patterns are highly specific.
+    # Format: (access_level, function_name, return_type)
+    # - access_level: Required access modifier (e.g., "protected")
+    # - function_name: Exact function name
+    # - return_type: Required return type hint (e.g., "array")
+    # All three components must match for exclusion.
+    EXCLUDED_FUNCTION_DEFINITIONS = [
+        ("protected", "casts", "array"),
+        ("public", "rules", "array"),
     ]
 
-    COMMAND_OUTPUT = [
-        r"\$this->info\s*\(",
-        r"\$this->error\s*\(",
-        r"\$this->line\s*\(",
-        r"\$this->comment\s*\(",
-        r"\$this->warn\s*\(",
-        r"\$this->warning\s*\(",
-    ]
-
+    # Regular expression functions
     REGEX_FUNCTIONS = [
-        r"\bpreg_match\s*\(",
-        r"\bpreg_match_all\s*\(",
-        r"\bpreg_replace\s*\(",
-        r"\bpreg_replace_callback\s*\(",
-        r"\bpreg_replace_callback_array\s*\(",
-        r"\bpreg_filter\s*\(",
-        r"\bpreg_grep\s*\(",
-        r"\bpreg_split\s*\(",
+        "preg_match",
+        "preg_match_all",
+        "preg_replace",
+        "preg_replace_callback",
+        "preg_replace_callback_array",
+        "preg_filter",
+        "preg_grep",
+        "preg_split",
     ]
 
+    # PHP builtin functions that take string arguments
     PHP_BUILTIN_FUNCTIONS = [
-        r"\bfunction_exists\s*\(",
-        r"\bclass_exists\s*\(",
-        r"\bmethod_exists\s*\(",
-        r"\binterface_exists\s*\(",
-        r"\btrait_exists\s*\(",
-        r"\bdefined\s*\(",
-        r"\bdefine\s*\(",
-        r"\bin_array\s*\(",
-        r"\barray_key_exists\s*\(",
-        r"\bisset\s*\(",
-        r"\bempty\s*\(",
-        r"\bheader\s*\(",
-        r"\bsetcookie\s*\(",
-        r"\bsession_name\s*\(",
-        r"\bini_get\s*\(",
-        r"\bini_set\s*\(",
-        r"\bextension_loaded\s*\(",
-        r"\bget_class\s*\(",
-        r"\bget_called_class\s*\(",
-        r"\bis_a\s*\(",
-        r"\bis_subclass_of\s*\(",
+        # Class/Function/Constant existence checks
+        "function_exists",
+        "class_exists",
+        "method_exists",
+        "interface_exists",
+        "trait_exists",
+        "defined",
+        "define",
+        "extension_loaded",
+        # Array functions
+        "in_array",
+        "array_key_exists",
+        "array_search",
+        "array_column",
+        "array_filter",
+        "array_map",
+        # Variable handling
+        "isset",
+        "empty",
+        "compact",
+        "extract",
+        # Type checking
+        "gettype",
+        "get_class",
+        "get_called_class",
+        "get_parent_class",
+        "is_a",
+        "is_subclass_of",
+        # Property/Method access
+        "property_exists",
+        "constant",
+        "call_user_func",
+        "call_user_func_array",
+        # HTTP/Session/Cookie
+        "header",
+        "setcookie",
+        "setrawcookie",
+        "session_name",
+        "session_id",
+        "session_save_path",
+        # Configuration
+        "ini_get",
+        "ini_set",
+        "ini_restore",
+        "putenv",
+        "getenv",
+        # File/Stream functions
+        "file_exists",
+        "is_file",
+        "is_dir",
+        "is_readable",
+        "is_writable",
+        "filetype",
+        "mime_content_type",
+        "stream_context_create",
+        "stream_wrapper_register",
+        # Error handling
+        "trigger_error",
+        "user_error",
+        "error_reporting",
+        # Date/Time
+        "date",
+        "strtotime",
+        "strftime",
+        "timezone_name_from_abbr",
+        # String functions (format specifiers)
+        "sprintf",
+        "vsprintf",
+        "sscanf",
+        # URL functions
+        "parse_url",
+        "http_build_query",
     ]
 
-    ELOQUENT_METHODS = [
-        r"::select\s*\(",
-        r"::where\s*\(",
-        r"::whereIn\s*\(",
-        r"::whereNotIn\s*\(",
-        r"::whereBetween\s*\(",
-        r"::whereNull\s*\(",
-        r"::whereNotNull\s*\(",
-        r"::orderBy\s*\(",
-        r"::groupBy\s*\(",
-        r"::having\s*\(",
-        r"::join\s*\(",
-        r"::leftJoin\s*\(",
-        r"::rightJoin\s*\(",
-        r"::table\s*\(",
-        r"->select\s*\(",
-        r"->where\s*\(",
-        r"->whereIn\s*\(",
-        r"->whereNotIn\s*\(",
-        r"->whereBetween\s*\(",
-        r"->whereNull\s*\(",
-        r"->whereNotNull\s*\(",
-        r"->orderBy\s*\(",
-        r"->groupBy\s*\(",
-        r"->having\s*\(",
-        r"->join\s*\(",
-        r"->leftJoin\s*\(",
-        r"->rightJoin\s*\(",
-        r"->pluck\s*\(",
-        r"->value\s*\(",
-        r"->raw\s*\(",
-        r"->table\s*\(",
-        r"->format\s*\(",
+    # Laravel helper functions that take string arguments
+    LARAVEL_HELPER_FUNCTIONS = [
+        # Path helpers
+        "app_path",
+        "base_path",
+        "config_path",
+        "database_path",
+        "public_path",
+        "resource_path",
+        "storage_path",
+        # URL helpers
+        "asset",
+        "secure_asset",
+        "route",
+        "secure_url",
+        "url",
+        "action",
+        # Configuration
+        "config",
+        "env",
+        # Session
+        "session",
+        # Request
+        "old",
+        "request",
+        # Views
+        "view",
+        # Responses
+        "response",
+        "redirect",
+        "back",
+        # Authentication
+        "auth",
+        "bcrypt",
+        "hash",
+        # Cache
+        "cache",
+        # Events
+        "event",
+        "broadcast",
+        # Queue/Jobs
+        "dispatch",
+        "dispatch_sync",
+        # Validation
+        "validator",
+        # String helpers
+        "class_basename",
+        "e",
+        "preg_replace_array",
+        "str",
+        "trans",
+        "trans_choice",
+        "__",
+        # Array helpers
+        "data_get",
+        "data_set",
+        "data_fill",
+        "head",
+        "last",
+        # Misc helpers
+        "abort",
+        "abort_if",
+        "abort_unless",
+        "app",
+        "collect",
+        "cookie",
+        "decrypt",
+        "encrypt",
+        "info",
+        "logger",
+        "method_field",
+        "now",
+        "optional",
+        "policy",
+        "resolve",
+        "retry",
+        "tap",
+        "throw_if",
+        "throw_unless",
+        "today",
+        "trait_uses_recursive",
+        "transform",
+        "value",
+        "with",
     ]
 
     def __init__(self, min_bytes: int = 2):
@@ -135,6 +287,65 @@ class PHPAnalyzer:
             min_bytes: Minimum byte length for string extraction (default: 2)
         """
         self.min_bytes = min_bytes
+        self._compiled_patterns = None
+        self._excluded_ranges = []  # List of (start_pos, end_pos) for excluded function calls
+
+    def _get_exclusion_patterns(self) -> List[str]:
+        """
+        Build regex patterns from function/method name lists.
+
+        All patterns are used to identify function/method calls whose entire
+        argument list should be excluded from string extraction.
+
+        Pattern format in EXCLUDED_FUNCTIONS:
+        - Simple name: "func" -> r"\\bfunc\\s*\\("
+        - Static method: "Class::method" -> r"Class::method\\s*\\("
+        - Blade directive: "@directive" -> r"@directive\\s*\\("
+        - Regex pattern: "regex:pattern" -> pattern (used as-is)
+
+        Returns:
+            List of regex patterns for exclusion checking
+        """
+        if self._compiled_patterns is not None:
+            return self._compiled_patterns
+
+        patterns = []
+
+        # Excluded functions and statements
+        for func in self.EXCLUDED_FUNCTIONS:
+            if func.startswith("regex:"):
+                # Custom regex pattern - use as-is
+                patterns.append(func[6:])  # Remove "regex:" prefix
+            elif "::" in func:
+                # Static method calls: Class::method(
+                patterns.append(rf"{re.escape(func)}\s*\(")
+            elif func.startswith("@"):
+                # Blade directives: @lang(
+                patterns.append(rf"{re.escape(func)}\s*\(")
+            else:
+                # Regular function calls: function(
+                patterns.append(rf"\b{re.escape(func)}\s*\(")
+
+        # Class instance methods (command output + Eloquent)
+        for method in self.CLASS_INSTANCE_METHODS:
+            patterns.append(rf"\$this->{re.escape(method)}\s*\(")  # Command output: $this->info()
+            patterns.append(rf"->{re.escape(method)}\s*\(")  # Eloquent instance: ->where()
+            patterns.append(rf"::{re.escape(method)}\s*\(")  # Eloquent static: ::select()
+
+        # Regex functions
+        for func in self.REGEX_FUNCTIONS:
+            patterns.append(rf"\b{re.escape(func)}\s*\(")
+
+        # PHP builtin functions
+        for func in self.PHP_BUILTIN_FUNCTIONS:
+            patterns.append(rf"\b{re.escape(func)}\s*\(")
+
+        # Laravel helper functions
+        for func in self.LARAVEL_HELPER_FUNCTIONS:
+            patterns.append(rf"\b{re.escape(func)}\s*\(")
+
+        self._compiled_patterns = patterns
+        return patterns
 
     def extract_and_validate_strings(self, content: str, validator_func) -> List[Tuple[str, int, int, int]]:
         """
@@ -152,13 +363,22 @@ class PHPAnalyzer:
         """
         results = []
 
-        # Extract all string literals
+        # Step 1: Identify all excluded ranges
+        self._identify_excluded_function_ranges(content)  # Excluded function calls
+        self._identify_excluded_function_definitions(content)  # Excluded function definitions
+
+        # Step 2: Extract all string literals
         string_literals = self.extract_string_literals(content)
 
-        # Validate and filter
+        # Step 3: Validate and filter
         for text, line, column, _length in string_literals:
             stripped_text = text.strip()
             if not stripped_text:
+                continue
+
+            # Check if string position is within any excluded range
+            position = StringProcessor.get_position_from_line_column(content, line, column)
+            if self._is_in_excluded_function_range(position):
                 continue
 
             # Use validation with context
@@ -485,17 +705,9 @@ class PHPAnalyzer:
         Returns:
             True if the string should be excluded
         """
-        all_patterns = (
-            self.TRANSLATION_FUNCTIONS
-            + self.LOG_FUNCTIONS
-            + self.CONSOLE_OUTPUT
-            + self.COMMAND_OUTPUT
-            + self.REGEX_FUNCTIONS
-            + self.PHP_BUILTIN_FUNCTIONS
-            + self.ELOQUENT_METHODS
-        )
+        patterns = self._get_exclusion_patterns()
 
-        for pattern in all_patterns:
+        for pattern in patterns:
             if re.search(pattern, before_string):
                 return True
 
@@ -547,5 +759,285 @@ class PHPAnalyzer:
 
         if remaining_stripped.startswith("=>"):
             return True
+
+        return False
+
+    def _identify_excluded_function_ranges(self, content: str) -> None:
+        """
+        Identify all ranges of excluded function calls (entire function call including arguments).
+
+        This method finds all calls to excluded functions and marks the entire function call range
+        (from function name to closing parenthesis). This applies uniformly to ALL exclusion categories:
+        - Excluded functions (translation, console output, logging)
+          Examples: __(), trans(), var_dump(), dd(), logger(), Log::error()
+        - Laravel helpers (config(), route(), view(), etc.)
+        - Class instance methods (->info(), ->where(), ::select(), etc.)
+        - And all other excluded function categories
+
+        Examples:
+        - Log::error('Connection error: ' . $ex->getMessage() . ' [POST ' . $url . ']')
+          → Entire range from 'Log::error(' to final ')' is excluded
+        - config('app.name')
+          → Entire range from 'config(' to ')' is excluded
+        - __('auth.failed')
+          → Entire range from '__(' to ')' is excluded
+        - logger('Processing ' . $count . ' items')
+          → Entire range from 'logger(' to ')' is excluded
+        - $this->info('Processing...')
+          → Entire range from '$this->info(' to ')' is excluded
+        - User::where('name', 'John')
+          → Entire range from '::where(' to ')' is excluded
+
+        Args:
+            content: PHP content to analyze
+        """
+        self._excluded_ranges = []
+        patterns = self._get_exclusion_patterns()
+
+        for pattern in patterns:
+            for match in re.finditer(pattern, content):
+                # match.end() - 1 points to the opening '(' in most cases
+                # Find the position of '(' after the function/method name
+                paren_pos = match.end() - 1
+
+                # Verify this is actually a '('
+                if paren_pos >= len(content) or content[paren_pos] != "(":
+                    continue
+
+                # Find the matching closing parenthesis
+                close_paren = self._find_matching_parenthesis(content, paren_pos)
+
+                if close_paren > paren_pos:
+                    # Exclude the entire function call (from start of match to closing paren)
+                    self._excluded_ranges.append((match.start(), close_paren + 1))
+
+    def _identify_excluded_function_definitions(self, content: str) -> None:
+        """
+        Identify all ranges of excluded function definitions (entire function including body).
+
+        STRICT MODE: This method uses highly specific patterns to avoid accidental exclusions.
+        Each pattern requires exact matches for:
+        1. Access level (e.g., "protected")
+        2. Function name (e.g., "casts")
+        3. Return type hint (e.g., ": array")
+
+        All three components must match for the function to be excluded.
+
+        Examples (WILL be excluded):
+        - protected function casts(): array { return ['key' => 'array']; }
+          → Entire range from 'protected function casts' to final '}' is excluded
+
+        Examples (will NOT be excluded - missing components):
+        - public function casts(): array { ... }  // Wrong access level
+        - protected function casts() { ... }  // Missing return type
+        - protected function customCasts(): array { ... }  // Wrong function name
+        - private function casts(): array { ... }  // Wrong access level
+
+        Args:
+            content: PHP content to analyze
+        """
+        for access_level, func_name, return_type in self.EXCLUDED_FUNCTION_DEFINITIONS:
+            # Pattern: EXACT access level + function + EXACT function name + EXACT return type
+            # Example: "protected function casts(): array"
+            # \b ensures word boundary (no partial matches)
+            # \s* allows for flexible whitespace
+            pattern = rf"{re.escape(access_level)}\s+function\s+\b{re.escape(func_name)}\b\s*\(\s*\)\s*:\s*{re.escape(return_type)}"
+
+            for match in re.finditer(pattern, content):
+                # Find the opening brace after the return type
+                # match.end() is right after the return type (e.g., "array")
+                brace_search_start = match.end()
+                brace_start = -1
+
+                # Search for opening brace after return type
+                # Allow for whitespace and possible comments
+                for i in range(brace_search_start, min(brace_search_start + 100, len(content))):
+                    if content[i] == "{":
+                        brace_start = i
+                        break
+                    elif content[i] == ";":
+                        # Abstract method or interface definition, no body
+                        break
+
+                if brace_start != -1:
+                    brace_end = self._find_matching_brace(content, brace_start)
+                    if brace_end > brace_start:
+                        # Exclude the entire function definition (from start of match to closing brace)
+                        self._excluded_ranges.append((match.start(), brace_end + 1))
+
+    def _find_matching_parenthesis(self, content: str, open_paren_pos: int) -> int:
+        """
+        Find the matching closing parenthesis for an opening parenthesis.
+
+        This correctly handles:
+        - Nested parentheses
+        - String literals containing parentheses
+        - Comments containing parentheses
+
+        Args:
+            content: Content to search
+            open_paren_pos: Position of the opening '('
+
+        Returns:
+            Position of matching ')', or -1 if not found
+        """
+        if open_paren_pos >= len(content) or content[open_paren_pos] != "(":
+            return -1
+
+        depth = 1
+        i = open_paren_pos + 1
+
+        while i < len(content) and depth > 0:
+            char = content[i]
+
+            # Skip multi-line comments /* ... */
+            if i + 1 < len(content) and content[i : i + 2] == "/*":
+                end = content.find("*/", i + 2)
+                if end != -1:
+                    i = end + 2
+                    continue
+                else:
+                    return -1
+
+            # Skip single-line comments //
+            if i + 1 < len(content) and content[i : i + 2] == "//":
+                end = content.find("\n", i + 2)
+                if end != -1:
+                    i = end + 1
+                else:
+                    return -1
+                continue
+
+            # Skip shell-style comments #
+            if char == "#":
+                end = content.find("\n", i + 1)
+                if end != -1:
+                    i = end + 1
+                else:
+                    return -1
+                continue
+
+            # Handle string literals
+            if char in ('"', "'"):
+                quote = char
+                i += 1
+                while i < len(content):
+                    if content[i] == "\\" and i + 1 < len(content):
+                        i += 2
+                        continue
+                    elif content[i] == quote:
+                        i += 1
+                        break
+                    else:
+                        i += 1
+                continue
+
+            # Count parentheses
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    return i
+
+            i += 1
+
+        return -1
+
+    def _find_matching_brace(self, content: str, open_brace_pos: int) -> int:
+        """
+        Find the matching closing brace for an opening brace.
+
+        This correctly handles:
+        - Nested braces
+        - String literals containing braces
+        - Comments containing braces
+
+        Args:
+            content: Content to search
+            open_brace_pos: Position of the opening '{'
+
+        Returns:
+            Position of matching '}', or -1 if not found
+        """
+        if open_brace_pos >= len(content) or content[open_brace_pos] != "{":
+            return -1
+
+        depth = 1
+        i = open_brace_pos + 1
+
+        while i < len(content) and depth > 0:
+            char = content[i]
+
+            # Skip multi-line comments /* ... */
+            if i + 1 < len(content) and content[i : i + 2] == "/*":
+                end = content.find("*/", i + 2)
+                if end != -1:
+                    i = end + 2
+                    continue
+                else:
+                    return -1
+
+            # Skip single-line comments //
+            if i + 1 < len(content) and content[i : i + 2] == "//":
+                end = content.find("\n", i + 2)
+                if end != -1:
+                    i = end + 1
+                else:
+                    return -1
+                continue
+
+            # Skip shell-style comments #
+            if char == "#":
+                end = content.find("\n", i + 1)
+                if end != -1:
+                    i = end + 1
+                else:
+                    return -1
+                continue
+
+            # Handle string literals
+            if char in ('"', "'"):
+                quote = char
+                i += 1
+                while i < len(content):
+                    if content[i] == "\\" and i + 1 < len(content):
+                        i += 2
+                        continue
+                    elif content[i] == quote:
+                        i += 1
+                        break
+                    else:
+                        i += 1
+                continue
+
+            # Count braces
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    return i
+
+            i += 1
+
+        return -1
+
+    def _is_in_excluded_function_range(self, position: int) -> bool:
+        """
+        Check if a position is within any excluded function call range.
+
+        Args:
+            position: Character position in content
+
+        Returns:
+            True if position is within an excluded range
+        """
+        if position == -1:
+            return False
+
+        for start, end in self._excluded_ranges:
+            if start <= position < end:
+                return True
 
         return False
