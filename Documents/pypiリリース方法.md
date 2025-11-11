@@ -44,11 +44,11 @@ uv run python -m build
 # distディレクトリの内容を確認
 ls dist/
 # 以下のファイルが生成されているはずです：
-# laravel_i18n_refactor-x.x.x-py3-none-any.whl
-# laravel_i18n_refactor-x.x.x.tar.gz
+# プロジェクト名-x.x.x-py3-none-any.whl
+# プロジェクト名-x.x.x.tar.gz
 
 # パッケージの内容を確認
-tar -tf dist/laravel_i18n_refactor-x.x.x.tar.gz | head -20
+tar -tf dist/プロジェクト名-x.x.x.tar.gz | head -20
 ```
 
 ### 3. TestPyPIへのアップロード
@@ -65,16 +65,16 @@ python -m twine upload --repository testpypi dist/*
 
 ```bash
 # TestPyPIから直接テスト（推奨）
-uvx --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ laravel_i18n_refactor --help
+uvx --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ プロジェクト名 --help
 
 # バージョン確認
-uvx --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ laravel_i18n_refactor --version
+uvx --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ プロジェクト名 --version
 
 # 基本動作テスト
-uvx --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ laravel_i18n_refactor --transport stdio
+uvx --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ プロジェクト名 --transport stdio
 ```
 
-**TestPyPIプロジェクトページ**: https://test.pypi.org/project/laravel_i18n_refactor/
+**TestPyPIプロジェクトページ**: https://test.pypi.org/project/プロジェクト名/
 
 ## Phase 2: 本番PyPIへの公開
 
@@ -94,15 +94,15 @@ python -m twine upload --repository pypi dist/*
 
 ```bash
 # 本番PyPIから動作確認
-uvx --force laravel_i18n_refactor --help
-uvx --force laravel_i18n_refactor --version
+uvx --force プロジェクト名 --help
+uvx --force プロジェクト名 --version
 
 # キャッシュクリア後のテスト
-uv cache clean laravel_i18n_refactor
-uvx laravel_i18n_refactor --help
+uv cache clean プロジェクト名
+uvx プロジェクト名 --help
 ```
 
-**PyPIプロジェクトページ**: https://pypi.org/project/laravel_i18n_refactor/
+**PyPIプロジェクトページ**: https://pypi.org/project/プロジェクト名/
 
 ## **バージョンアップ時**
 

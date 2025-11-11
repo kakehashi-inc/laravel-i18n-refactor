@@ -1,8 +1,10 @@
 """Google Gemini provider for translations."""
 
+import os
 import sys
 from typing import List, Dict, Tuple
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from .base import TranslationProvider
 
 
@@ -32,16 +34,16 @@ class GeminiProvider(TranslationProvider):
         # API key (required) - try both GEMINI_API_KEY and GOOGLE_API_KEY
         self.api_key = kwargs.get("api_key")
         if not self.api_key:
-            import os
-
             self.api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
         if not self.api_key and not kwargs.get("list_models"):
             raise ValueError("API key required (--api-key or GEMINI_API_KEY/GOOGLE_API_KEY env var)")
 
-        # Configure API
+        # Initialize client
         if self.api_key:
-            genai.configure(api_key=self.api_key)  # type: ignore
+            self.client = genai.Client(api_key=self.api_key)
+        else:
+            self.client = None
 
         # Generation config
         self.generation_config = {}
@@ -64,26 +66,51 @@ class GeminiProvider(TranslationProvider):
 
     def list_models(self) -> List[str]:
         """List available Gemini models."""
+        if not self.client:
+            return []
         try:
-            models = genai.list_models()  # type: ignore
+            # In google-genai, list models via client.models.list()
+            models = list(self.client.models.list())
             # Filter models that support generateContent
-            return [m.name.replace("models/", "") for m in models if "generateContent" in m.supported_generation_methods]
+            result = []
+            for m in models:
+                if hasattr(m, "name") and m.name:
+                    # Convert model name to string and remove 'models/' prefix
+                    if isinstance(m.name, str):
+                        model_name = m.name.replace("models/", "")
+                    else:
+                        model_name = str(m.name)
+                    supported_methods = getattr(m, "supported_generation_methods", [])
+                    if supported_methods and "generateContent" in supported_methods:
+                        result.append(model_name)
+            return result
         except (ValueError, RuntimeError, ConnectionError) as e:
             print(f"Error listing models: {e}", file=sys.stderr)
             return []
 
     def translate_batch(self, items: List[Dict], languages: List[Tuple[str, str]]) -> List[Dict]:
         """Translate items using Gemini API."""
+        if not self.client:
+            print("Error: Gemini client not initialized", file=sys.stderr)
+            return []
+
         prompt = self.build_prompt(items, languages)
 
         try:
-            # Convert dict to proper GenerationConfig if needed
-            generation_config = self.generation_config if self.generation_config else None
-            model = genai.GenerativeModel(model_name=self.model, generation_config=generation_config)  # type: ignore
+            # Build generation config
+            if self.generation_config:
+                config = types.GenerateContentConfig(**self.generation_config)
+            else:
+                config = None
 
-            response = model.generate_content(prompt)
+            # Use client.models.generate_content
+            response = self.client.models.generate_content(model=self.model, contents=prompt, config=config)
 
             # Extract response text
+            if not response.text:
+                print("Error: No text in response", file=sys.stderr)
+                return []
+
             content = response.text.strip()
             # Parse XML response
             return self.parse_xml_responses(content, items, languages)

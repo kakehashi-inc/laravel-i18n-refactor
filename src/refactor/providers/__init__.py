@@ -42,7 +42,7 @@ def get_provider(provider_name: str, **kwargs) -> TranslationProvider:
             return GeminiProvider(**kwargs)
         except ImportError as e:
             raise ImportError(
-                f"Gemini provider requires 'google-generativeai' library. " f"Install with: pip install 'laravel-i18n-refactor[translate-gemini]'"
+                f"Gemini provider requires 'google-genai' library. " f"Install with: pip install 'laravel-i18n-refactor[translate-gemini]'"
             ) from e
 
     elif provider_name == "openai-compat":
