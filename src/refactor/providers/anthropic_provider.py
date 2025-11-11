@@ -1,17 +1,18 @@
-"""Anthropic Claude provider for translations."""
+"""Anthropic provider for translations."""
 
 import sys
 from typing import List, Dict, Tuple
 import anthropic
-from .base import TranslationProvider
+from anthropic.types import TextBlock
+from .base_provider import BaseProvider
 
 
-class ClaudeProvider(TranslationProvider):
-    """Anthropic Claude provider for translations."""
+class AnthropicProvider(BaseProvider):
+    """Anthropic provider for translations."""
 
     def __init__(self, **kwargs):
         """
-        Initialize Claude provider.
+        Initialize Anthropic provider.
 
         Args:
             model: Model name (required unless list_models=True)
@@ -37,20 +38,30 @@ class ClaudeProvider(TranslationProvider):
 
         # Generation parameters
         self.temperature = self._get_float_param("temperature", "ANTHROPIC_TEMPERATURE", kwargs)
-        # Claude requires max_tokens, set default
+        # Anthropic requires max_tokens, set default
         self.max_tokens = self._get_int_param("max_tokens", "ANTHROPIC_MAX_TOKENS", kwargs, default=4096)
 
     def list_models(self) -> List[str]:
-        """List available Claude models."""
-        # Anthropic API doesn't provide model listing endpoint
-        return ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307", "claude-2.1", "claude-2.0", "claude-instant-1.2"]
+        """List available Anthropic models."""
+        try:
+            models = self.client.models.list()
+            if models.data is None:
+                return []
+            return [model.id for model in models.data]
+        except Exception:  # pylint: disable=broad-except
+            # Handle potential API errors
+            return []
 
     def translate_batch(self, items: List[Dict], languages: List[Tuple[str, str]]) -> List[Dict]:
-        """Translate items using Claude API."""
-        prompt = self.build_prompt(items, languages)
+        """Translate items using Anthropic API."""
+        prompt = self.prompt_builder.build_prompt(items, languages)
 
         # Build request parameters
-        params = {"model": self.model, "messages": [{"role": "user", "content": prompt}], "max_tokens": self.max_tokens}
+        params = {
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+        }
 
         # Add optional parameters if provided
         if self.temperature is not None:
@@ -58,10 +69,23 @@ class ClaudeProvider(TranslationProvider):
 
         try:
             response = self.client.messages.create(**params)
-            # Claude returns text content
-            content = response.content[0].text
+
+            # Extract translation from response content
+            # Handle both TextBlock and ThinkingBlock (newer models may include thinking process)
+            content_text = ""
+            for content_block in response.content:
+                if isinstance(content_block, TextBlock):
+                    content_text = content_block.text
+                    break  # Use the first text block
+                # Skip other types (e.g., ThinkingBlock)
+                continue
+
+            if not content_text:
+                print("Error: No text content found in Anthropic API response", file=sys.stderr)
+                return []
+
             # Parse XML response
-            return self.parse_xml_responses(content, items, languages)
-        except Exception as e:
-            print(f"Error calling Claude API: {e}", file=sys.stderr)
+            return self.prompt_builder.parse_xml_responses(content_text, items, languages)
+        except Exception as e:  # pylint: disable=broad-except
+            print(f"Error calling Anthropic API: {e}", file=sys.stderr)
             return []

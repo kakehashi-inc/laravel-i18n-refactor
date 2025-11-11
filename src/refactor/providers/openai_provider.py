@@ -3,10 +3,10 @@
 import sys
 from typing import List, Dict, Tuple
 import openai
-from .base import TranslationProvider
+from .base_provider import BaseProvider
 
 
-class OpenAIProvider(TranslationProvider):
+class OpenAIProvider(BaseProvider):
     """OpenAI GPT provider for translations."""
 
     def __init__(self, **kwargs):
@@ -47,16 +47,16 @@ class OpenAIProvider(TranslationProvider):
         """List available GPT models."""
         try:
             models = self.client.models.list()
-            # Filter GPT models
-            gpt_models = [m.id for m in models.data if "gpt" in m.id.lower()]
-            return sorted(gpt_models)
-        except Exception as e:
-            print(f"Error listing models: {e}", file=sys.stderr)
+            if models.data is None:
+                return []
+            return [model.id for model in models.data]
+        except Exception:  # pylint: disable=broad-except
+            # Handle potential API errors
             return []
 
     def translate_batch(self, items: List[Dict], languages: List[Tuple[str, str]]) -> List[Dict]:
         """Translate items using OpenAI API."""
-        prompt = self.build_prompt(items, languages)
+        prompt = self.prompt_builder.build_prompt(items, languages)
 
         # Build request parameters
         messages = [
@@ -76,7 +76,7 @@ class OpenAIProvider(TranslationProvider):
             response = self.client.chat.completions.create(**params)
             content = response.choices[0].message.content
             # Parse XML response
-            return self.parse_xml_responses(content, items, languages)
-        except Exception as e:
+            return self.prompt_builder.parse_xml_responses(content, items, languages)
+        except Exception as e:  # pylint: disable=broad-except
             print(f"Error calling OpenAI API: {e}", file=sys.stderr)
             return []

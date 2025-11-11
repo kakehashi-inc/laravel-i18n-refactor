@@ -118,13 +118,13 @@ def setup_translate_parser(subparsers) -> None:
     openai_parser.add_argument("--max-tokens", type=int, help="Maximum tokens (or OPENAI_MAX_TOKENS env var)")
     openai_parser.set_defaults(func=translate_files)
 
-    # Claude provider
-    claude_parser = provider_subparsers.add_parser("claude", parents=[translate_common], help="Use Anthropic Claude")
-    claude_parser.add_argument("--model", required=True, help="Model name (required)")
-    claude_parser.add_argument("--api-key", help="API key (or ANTHROPIC_API_KEY env var)")
-    claude_parser.add_argument("--temperature", type=float, help="Sampling temperature (or ANTHROPIC_TEMPERATURE env var)")
-    claude_parser.add_argument("--max-tokens", type=int, help="Maximum tokens (or ANTHROPIC_MAX_TOKENS env var, default: 4096)")
-    claude_parser.set_defaults(func=translate_files)
+    # Anthropic provider
+    anthropic_parser = provider_subparsers.add_parser("anthropic", parents=[translate_common], help="Use Anthropic Claude")
+    anthropic_parser.add_argument("--model", required=True, help="Model name (required)")
+    anthropic_parser.add_argument("--api-key", help="API key (or ANTHROPIC_API_KEY env var)")
+    anthropic_parser.add_argument("--temperature", type=float, help="Sampling temperature (or ANTHROPIC_TEMPERATURE env var)")
+    anthropic_parser.add_argument("--max-tokens", type=int, help="Maximum tokens (or ANTHROPIC_MAX_TOKENS env var, default: 4096)")
+    anthropic_parser.set_defaults(func=translate_files)
 
     # Gemini provider
     gemini_parser = provider_subparsers.add_parser("gemini", parents=[translate_common], help="Use Google Gemini")

@@ -129,7 +129,7 @@ laravel-i18n-refactor translate <プロバイダー> --model <モデル名> -i <
 | プロバイダー | コマンド | 説明 |
 |----------|---------|-------------|
 | OpenAI | `openai` |  |
-| Claude | `claude` |  |
+| Anthropic | `anthropic` |  |
 | Gemini | `gemini` |  |
 | OpenAI互換 | `openai-compat` | OpenAI互換エンドポイント（LM Studio、LocalAIなど） |
 | Anthropic互換 | `anthropic-compat` | Anthropic互換エンドポイント（MiniMax M2など） |
@@ -157,7 +157,7 @@ laravel-i18n-refactor translate <プロバイダー> --model <モデル名> -i <
 | `--max-tokens` | `OPENAI_MAX_TOKENS` | 最大トークン数 |
 | `--batch-size` | `OPENAI_BATCH_SIZE` | バッチサイズ（デフォルト: 10） |
 
-#### Claude (Anthropic)
+#### Anthropic (Claude)
 
 | オプション | 環境変数 | 説明 |
 |--------|---------------------|-------------|

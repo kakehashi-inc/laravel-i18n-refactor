@@ -3,10 +3,10 @@
 import sys
 from typing import List, Dict, Tuple
 import ollama
-from .base import TranslationProvider
+from .base_provider import BaseProvider
 
 
-class OllamaProvider(TranslationProvider):
+class OllamaProvider(BaseProvider):
     """Ollama provider for local model translations."""
 
     def __init__(self, **kwargs):
@@ -66,21 +66,26 @@ class OllamaProvider(TranslationProvider):
         """List available Ollama models."""
         try:
             response = self.client.list()
-            return [model["name"] for model in response["models"]]
-        except Exception as e:
-            print(f"Error listing models: {e}", file=sys.stderr)
+            # pylint: disable=no-member
+            return [m.model for m in response.models if m.model]  # type: ignore[attr-defined]
+        except Exception:  # pylint: disable=broad-except
+            # Handle potential API errors
             return []
 
     def translate_batch(self, items: List[Dict], languages: List[Tuple[str, str]]) -> List[Dict]:
         """Translate items using Ollama."""
-        prompt = self.build_prompt(items, languages)
+        prompt = self.prompt_builder.build_prompt(items, languages)
 
         try:
-            response = self.client.generate(model=self.model, prompt=prompt, options=self.options if self.options else None)
+            response = self.client.generate(
+                model=self.model,
+                prompt=prompt,
+                options=self.options if self.options else None,
+            )
 
             content = response["response"]
             # Parse XML response
-            return self.parse_xml_responses(content, items, languages)
-        except Exception as e:
+            return self.prompt_builder.parse_xml_responses(content, items, languages)
+        except Exception as e:  # pylint: disable=broad-except
             print(f"Error calling Ollama API: {e}", file=sys.stderr)
             return []

@@ -1,12 +1,11 @@
 """OpenAI-compatible provider for translations."""
 
-import sys
-from typing import List, Dict, Tuple
+from typing import List
 import openai
-from .base import TranslationProvider
+from .openai_provider import OpenAIProvider
 
 
-class OpenAICompatProvider(TranslationProvider):
+class OpenAICompatProvider(OpenAIProvider):
     """OpenAI-compatible API provider (LM Studio, LocalAI, etc.)."""
 
     def __init__(self, **kwargs):
@@ -21,7 +20,10 @@ class OpenAICompatProvider(TranslationProvider):
             max_tokens: Maximum tokens (optional, or OPENAI_COMPAT_MAX_TOKENS env var)
             list_models: If True, skip validation for model listing
         """
-        super().__init__(**kwargs)
+        # Don't call parent __init__ yet as we need to override client initialization
+        # Call grandparent (BaseProvider) __init__ instead
+        # pylint: disable=bad-super-call
+        super(OpenAIProvider, self).__init__(**kwargs)
 
         # Model (required)
         self.model = self._get_param("model", "OPENAI_COMPAT_MODEL", kwargs)
@@ -34,10 +36,16 @@ class OpenAICompatProvider(TranslationProvider):
             raise ValueError("API base URL required (--api-base or OPENAI_COMPAT_API_BASE env var)")
 
         # API key (optional, some servers don't require it)
-        self.api_key = self._get_param("api_key", "OPENAI_COMPAT_API_KEY", kwargs) or "dummy"
+        # If not provided, use a dummy key to bypass OpenAI client validation
+        self.api_key = self._get_param("api_key", "OPENAI_COMPAT_API_KEY", kwargs)
+        if not self.api_key:
+            self.api_key = "sk-no-key-required"
 
         # Initialize client
         self.client = openai.OpenAI(api_key=self.api_key, base_url=self.api_base)
+
+        # Organization (optional)
+        self.organization = None
 
         # Generation parameters (optional)
         self.temperature = self._get_float_param("temperature", "OPENAI_COMPAT_TEMPERATURE", kwargs)
@@ -47,35 +55,9 @@ class OpenAICompatProvider(TranslationProvider):
         """List available models from the endpoint."""
         try:
             models = self.client.models.list()
-            return [m.id for m in models.data]
-        except Exception as e:
-            print(f"Error listing models: {e}", file=sys.stderr)
-            print("Note: Some OpenAI-compatible endpoints may not support model listing", file=sys.stderr)
-            return []
-
-    def translate_batch(self, items: List[Dict], languages: List[Tuple[str, str]]) -> List[Dict]:
-        """Translate items using OpenAI-compatible API."""
-        prompt = self.build_prompt(items, languages)
-
-        # Build request parameters
-        messages = [
-            {"role": "system", "content": "You are a translation assistant for Laravel i18n."},
-            {"role": "user", "content": prompt},
-        ]
-
-        params = {"model": self.model, "messages": messages}
-
-        # Add optional parameters if provided
-        if self.temperature is not None:
-            params["temperature"] = self.temperature
-        if self.max_tokens is not None:
-            params["max_tokens"] = self.max_tokens
-
-        try:
-            response = self.client.chat.completions.create(**params)
-            content = response.choices[0].message.content
-            # Parse XML response
-            return self.parse_xml_responses(content, items, languages)
-        except Exception as e:
-            print(f"Error calling OpenAI-compatible API: {e}", file=sys.stderr)
+            if models.data is None:
+                return []
+            return [model.id for model in models.data]
+        except Exception:  # pylint: disable=broad-except
+            # Some OpenAI-compatible endpoints may not support model listing
             return []

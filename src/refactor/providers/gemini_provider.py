@@ -5,10 +5,10 @@ import sys
 from typing import List, Dict, Tuple
 from google import genai
 from google.genai import types
-from .base import TranslationProvider
+from .base_provider import BaseProvider
 
 
-class GeminiProvider(TranslationProvider):
+class GeminiProvider(BaseProvider):
     """Google Gemini provider for translations."""
 
     def __init__(self, **kwargs):
@@ -69,9 +69,8 @@ class GeminiProvider(TranslationProvider):
         if not self.client:
             return []
         try:
-            # In google-genai, list models via client.models.list()
+            # List models that support generateContent
             models = list(self.client.models.list())
-            # Filter models that support generateContent
             result = []
             for m in models:
                 if hasattr(m, "name") and m.name:
@@ -84,8 +83,8 @@ class GeminiProvider(TranslationProvider):
                     if supported_methods and "generateContent" in supported_methods:
                         result.append(model_name)
             return result
-        except (ValueError, RuntimeError, ConnectionError) as e:
-            print(f"Error listing models: {e}", file=sys.stderr)
+        except Exception:  # pylint: disable=broad-except
+            # Handle potential API errors
             return []
 
     def translate_batch(self, items: List[Dict], languages: List[Tuple[str, str]]) -> List[Dict]:
@@ -94,7 +93,7 @@ class GeminiProvider(TranslationProvider):
             print("Error: Gemini client not initialized", file=sys.stderr)
             return []
 
-        prompt = self.build_prompt(items, languages)
+        prompt = self.prompt_builder.build_prompt(items, languages)
 
         try:
             # Build generation config
@@ -113,7 +112,7 @@ class GeminiProvider(TranslationProvider):
 
             content = response.text.strip()
             # Parse XML response
-            return self.parse_xml_responses(content, items, languages)
-        except (ValueError, RuntimeError, ConnectionError) as e:
+            return self.prompt_builder.parse_xml_responses(content, items, languages)
+        except Exception as e:  # pylint: disable=broad-except
             print(f"Error calling Gemini API: {e}", file=sys.stderr)
             return []

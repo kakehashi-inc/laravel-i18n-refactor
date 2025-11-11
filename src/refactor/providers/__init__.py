@@ -1,10 +1,9 @@
 """AI providers for translation."""
 
-from typing import Optional
-from .base import TranslationProvider
+from .base_provider import BaseProvider
 
 
-def get_provider(provider_name: str, **kwargs) -> TranslationProvider:
+def get_provider(provider_name: str, **kwargs) -> BaseProvider:
     """
     Factory function to get provider instance.
 
@@ -25,15 +24,15 @@ def get_provider(provider_name: str, **kwargs) -> TranslationProvider:
 
             return OpenAIProvider(**kwargs)
         except ImportError as e:
-            raise ImportError(f"OpenAI provider requires 'openai' library. " f"Install with: pip install 'laravel-i18n-refactor[translate-openai]'") from e
+            raise ImportError("OpenAI provider requires 'openai' library. Install with: pip install 'laravel-i18n-refactor[translate-openai]'") from e
 
-    elif provider_name == "claude":
+    elif provider_name == "anthropic":
         try:
-            from .claude_provider import ClaudeProvider
+            from .anthropic_provider import AnthropicProvider
 
-            return ClaudeProvider(**kwargs)
+            return AnthropicProvider(**kwargs)
         except ImportError as e:
-            raise ImportError(f"Claude provider requires 'anthropic' library. " f"Install with: pip install 'laravel-i18n-refactor[translate-claude]'") from e
+            raise ImportError("Anthropic provider requires 'anthropic' library. Install with: pip install 'laravel-i18n-refactor[translate-claude]'") from e
 
     elif provider_name == "gemini":
         try:
@@ -41,9 +40,7 @@ def get_provider(provider_name: str, **kwargs) -> TranslationProvider:
 
             return GeminiProvider(**kwargs)
         except ImportError as e:
-            raise ImportError(
-                f"Gemini provider requires 'google-genai' library. " f"Install with: pip install 'laravel-i18n-refactor[translate-gemini]'"
-            ) from e
+            raise ImportError("Gemini provider requires 'google-genai' library. Install with: pip install 'laravel-i18n-refactor[translate-gemini]'") from e
 
     elif provider_name == "openai-compat":
         try:
@@ -52,7 +49,7 @@ def get_provider(provider_name: str, **kwargs) -> TranslationProvider:
             return OpenAICompatProvider(**kwargs)
         except ImportError as e:
             raise ImportError(
-                f"OpenAI-compatible provider requires 'openai' library. " f"Install with: pip install 'laravel-i18n-refactor[translate-openai]'"
+                "OpenAI-compatible provider requires 'openai' library. Install with: pip install 'laravel-i18n-refactor[translate-openai]'"
             ) from e
 
     elif provider_name == "ollama":
@@ -61,7 +58,7 @@ def get_provider(provider_name: str, **kwargs) -> TranslationProvider:
 
             return OllamaProvider(**kwargs)
         except ImportError as e:
-            raise ImportError(f"Ollama provider requires 'ollama' library. " f"Install with: pip install 'laravel-i18n-refactor[translate-ollama]'") from e
+            raise ImportError("Ollama provider requires 'ollama' library. Install with: pip install 'laravel-i18n-refactor[translate-ollama]'") from e
 
     elif provider_name == "anthropic-compat":
         try:
@@ -77,4 +74,4 @@ def get_provider(provider_name: str, **kwargs) -> TranslationProvider:
         raise ValueError(f"Unknown provider: {provider_name}")
 
 
-__all__ = ["get_provider", "TranslationProvider"]
+__all__ = ["get_provider", "BaseProvider"]

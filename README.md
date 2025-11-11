@@ -129,7 +129,7 @@ laravel-i18n-refactor translate <provider> --model <model-name> -i <input-file> 
 | Provider | Command | Description |
 |----------|---------|-------------|
 | OpenAI | `openai` |  |
-| Claude | `claude` |  |
+| Anthropic | `anthropic` |  |
 | Gemini | `gemini` |  |
 | OpenAI-Compatible | `openai-compat` | OpenAI-compatible endpoints (LM Studio, LocalAI, etc.) |
 | Anthropic-Compatible | `anthropic-compat` | Anthropic-compatible endpoints (MiniMax M2, etc.) |
@@ -157,7 +157,7 @@ laravel-i18n-refactor translate <provider> --model <model-name> -i <input-file> 
 | `--max-tokens` | `OPENAI_MAX_TOKENS` | Maximum tokens |
 | `--batch-size` | `OPENAI_BATCH_SIZE` | Batch size (default: 10) |
 
-#### Claude (Anthropic)
+#### Anthropic (Claude)
 
 | Option | Environment Variable | Description |
 |--------|---------------------|-------------|
