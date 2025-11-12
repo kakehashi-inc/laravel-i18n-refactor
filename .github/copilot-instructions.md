@@ -1,5 +1,45 @@
 # Laravel i18n Refactor Tool - AI Agent Instructions
 
+## Agent Behavior Principles
+
+### Context Gathering Strategy
+
+**Goal:** Get enough context fast. Parallelize discovery and stop as soon as you can act.
+
+**Method:**
+- Start broad, then fan out to focused subqueries
+- Launch varied queries in parallel; read top hits per query; deduplicate paths and cache results
+- Avoid over-searching for context; run targeted searches in one parallel batch when needed
+
+**Early Stop Criteria:**
+- You can name exact content to change
+- Top hits converge (~70%) on one area/path
+
+**Escalation:**
+- If signals conflict or scope is fuzzy, run one refined parallel batch, then proceed
+
+**Depth:**
+- Trace only symbols you'll modify or whose contracts you rely on
+- Avoid transitive expansion unless necessary
+
+**Loop:** Batch search → minimal plan → complete task. Search again only if validation fails or new unknowns appear.
+
+### Persistence & Problem Solving
+
+- **You are an agent:** Keep going until the user's query is completely resolved before ending your turn
+- **Only terminate** when you are sure the problem is solved
+- **Never stop** when encountering uncertainty—research or deduce the most reasonable approach and continue
+- **Do not ask for confirmation** on assumptions—decide the most reasonable assumption, proceed with it, and document it after finishing
+- **Self-reflection:** Think deeply about every aspect of a world-class solution; create an internal rubric (5-7 categories) and iterate until hitting top marks across all categories
+
+### Code Quality Principles
+
+**Guiding Principles:**
+- **Readability:** For code including comments, avoid environment-dependent characters, emojis, or non-standard character strings
+- **Maintainability:** Follow proper directory structure, maintain consistent naming conventions, and organize shared logic appropriately
+- **Consistency:** Adhere to consistent design patterns—naming, structure, and organization must be unified
+- **Visual Quality:** Follow high-quality standards (spacing, padding, consistent patterns)
+
 ## Project Overview
 
 CLI tool extracting hardcoded strings from Laravel projects (Blade templates and PHP files) for internationalization. Written in Python 3.10+, published to PyPI, and used via `uvx laravel-i18n-refactor extract <directory>`.

@@ -6,6 +6,54 @@
 **Language:** Python 3.10+ | **Package:** PyPI via `uvx laravel-i18n-refactor`
 **Entry:** `src/refactor/main.py` → `actions/extract.py` → Processors → JSON output
 
+## 🎯 Agent Behavior Principles
+
+### Context Gathering Strategy
+
+**Goal:** Get enough context fast. Parallelize discovery and stop as soon as you can act.
+
+**Workflow:**
+
+1. **Start broad:** Understand the overall problem domain
+2. **Fan out in parallel:** Launch varied queries simultaneously
+3. **Read top hits:** Review most relevant results from each query
+4. **Deduplicate & cache:** Avoid repeating queries for same paths
+5. **Early stop:** Act as soon as you have enough context
+
+**Early Stop Criteria:**
+
+- ✅ You can name exact content to change
+- ✅ Top hits converge (~70%) on one area/path
+
+**Escalation Rule:**
+
+- If signals conflict or scope is fuzzy → run ONE refined parallel batch → then proceed
+
+**Depth Control:**
+
+- Trace only symbols you'll **modify** or whose contracts you **rely on**
+- Avoid transitive expansion unless necessary
+- Loop: `Batch search → minimal plan → complete task`
+
+### Persistence & Autonomy
+
+**Critical Rules:**
+
+- 🤖 **You are an autonomous agent:** Keep going until the task is completely resolved
+- ✅ **Only terminate** when you are certain the problem is solved
+- 🚫 **Never stop** when encountering uncertainty—research, deduce, and continue
+- 🚫 **Never ask for confirmation**—make the most reasonable assumption and document it
+- 💡 **Self-reflect:** Create internal rubric (5-7 categories), iterate until solution hits top marks
+
+### Code Quality Standards
+
+**Mandatory Principles:**
+
+- **Readability:** No environment-dependent chars, emojis, or non-standard strings in code/comments
+- **Maintainability:** Proper directory structure, consistent naming, organized shared logic
+- **Consistency:** Unified patterns across naming, structure, and organization
+- **Documentation:** Document assumptions and decisions after completing actions
+
 ## ⚠️ Critical Development Rules
 
 ### Python Environment Management
@@ -65,7 +113,8 @@ pattern*
 ## Architecture Overview
 
 ### Processing Flow
-```
+
+```text
 User Input (directory + pattern)
     ↓
 main.py (argparse CLI)
@@ -84,13 +133,15 @@ output_formatter.py (JSON output + auto-splitting)
 
 ### Two-Track Processing Model
 
-Files are routed by extension:
+**File Routing by Extension:**
+
 - **`.blade.php`** → `BladeProcessor`: Parses HTML with BeautifulSoup (lxml), extracts text nodes/attributes/`<script>` strings
 - **`.php`** → `PHPProcessor`: Manual tokenization (Python AST incompatible with Blade syntax), context-aware filtering
 
 **Why manual parsing in PHPProcessor?** Standard Python AST doesn't handle Blade syntax in PHP files. Manual scanning preserves position data (line/column/length) needed for output.
 
 **Current approach (NO MASKING):**
+
 - Parse original content directly with BeautifulSoup
 - Filter excluded patterns afterwards using `_should_exclude_text()` and `_is_in_excluded_range()`
 - Position accuracy: 97% (3% are file boundary cases with fewer context lines)
@@ -123,18 +174,22 @@ Files are routed by extension:
 
 ## Output Format
 
-**⚠️ IMPORTANT: Automatic File Splitting**
+### Automatic File Splitting
 
 Output files are **automatically split** when extracting many strings:
+
 - **Default threshold**: 100 items per file
 - **File naming**: `output.json` → `output-01.json`, `output-02.json`, `output-03.json`, ...
 - **Control**: `--split-threshold NUM` to customize (0 = disable splitting)
 - **Implementation**: `src/refactor/utils/output_formatter.py` (`_write_to_files()`)
 
 **When validating or testing output:**
+
 - Always check for numbered files (e.g., `output-1.json`, `output-2.json`)
 - List directory contents to find the latest file
 - Use the highest-numbered file for validation
+
+### JSON Structure
 
 ```json
 [
@@ -145,10 +200,10 @@ Output files are **automatically split** when extracting many strings:
         "file": "/absolute/path/file.php",
         "positions": [
           {
-            "line": 10,        // 1-based
-            "column": 5,       // 0-based
-            "length": 15,      // character count
-            "context": [       // 5 lines (2 before + target + 2 after)
+            "line": 10,
+            "column": 5,
+            "length": 15,
+            "context": [
               "    previous line",
               "    target line with extracted string",
               "    next line"
@@ -161,7 +216,8 @@ Output files are **automatically split** when extracting many strings:
 ]
 ```
 
-**Fields:**
+**Field Specifications:**
+
 - `line`: 1-based line number
 - `column`: 0-based column position
 - `length`: character count (not bytes)
@@ -172,35 +228,44 @@ Output files are **automatically split** when extracting many strings:
 ### Blade Excludes
 
 **Translation functions:**
+
 - `{{ __() }}`, `{{ trans() }}`, `@lang()`
 - `{!! __() !!}`, `{!! trans() !!}`
 
 **Variables:**
+
 - `{{ $variable }}`, `{!! $variable !!}`
 
 **Directives:**
+
 - `@if()`, `@foreach()`, `@endif`, `@endforeach`
 - `@php...@endphp`
 
 **Comments:**
+
 - `<!-- HTML comments -->`
 - `{{-- Blade comments --}}`
 
 ### PHP Excludes
 
 **Translation functions:**
+
 - `__()`, `trans()`, `Lang::get()`
 
 **Logs:**
+
 - `Log::info()`, `logger()`, `error_log()`
 
 **Console output:**
+
 - `echo`, `print`, `var_dump()`, `dd()`, `dump()`
 
 **Command output:**
+
 - `$this->info()`, `$this->error()`, `$this->warn()`
 
 **Array keys:**
+
 - `'key' => 'value'` (values are extracted, keys are excluded)
 
 **Context filtering:** PHPProcessor checks 200 chars before string literals using regex patterns (see `_should_include_string()`).
@@ -246,6 +311,7 @@ All processors return: `List[Tuple[str, int, int, int]]`
 ### Character Filtering
 
 Both processors strip whitespace and skip:
+
 - Empty/whitespace-only strings
 - ASCII-only digits/symbols (e.g., "123", "===")
 - **Exception:** Non-ASCII chars (Japanese, emoji) bypass symbol check
@@ -254,7 +320,7 @@ Both processors strip whitespace and skip:
 
 ### File Organization
 
-```
+```text
 src/refactor/
 ├── main.py                    # CLI entry (argparse)
 ├── actions/
@@ -319,7 +385,7 @@ for line_text in text.splitlines():
 
 ## Critical Constraints
 
-### DO:
+### DO
 
 - **Preserve line/column conventions:** Line is 1-based, column is 0-based
 - **Use absolute paths:** `file_path.resolve()` in output
@@ -327,7 +393,7 @@ for line_text in text.splitlines():
 - **Handle failures gracefully:** Individual file failures print warnings but don't halt processing
 - **Default values in main.py only:** All command-line parameter defaults must be in `main.py` argparse configuration
 
-### DON'T:
+### DON'T
 
 - **Use Python AST for parsing:** Incompatible with Blade syntax
 - **Modify exclusion patterns without spec review:** Changes must align with `システム仕様書.md`
